@@ -167,17 +167,15 @@ defmodule BroadwayKafka.ProducerTest do
     Broadway.start_link(Forwarder,
       name: new_unique_name(),
       context: %{test_pid: self()},
-      producers: [
-        default: [
-          module: {BroadwayKafka.Producer,[
-            client: FakeKafkaClient,
-            test_pid: self(),
-            message_server: message_server,
-            receive_interval: 0,
-            max_bytes: 10
-          ]},
-          stages: producers_stages
-        ]
+      producer: [
+        module: {BroadwayKafka.Producer,[
+          client: FakeKafkaClient,
+          test_pid: self(),
+          message_server: message_server,
+          receive_interval: 0,
+          max_bytes: 10
+        ]},
+        stages: producers_stages
       ],
       processors: [
         default: [stages: processors_stages]
@@ -201,9 +199,9 @@ defmodule BroadwayKafka.ProducerTest do
     :"Broadway#{System.unique_integer([:positive, :monotonic])}"
   end
 
-  defp get_producer(broadway, key \\ :default, index \\ 1) do
+  defp get_producer(broadway, index \\ 1) do
     {_, name} = Process.info(broadway, :registered_name)
-    :"#{name}.Broadway.Producer_#{key}_#{index}"
+    :"#{name}.Broadway.Producer_#{index}"
   end
 
   defp stop_broadway(pid) do
