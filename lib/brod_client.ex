@@ -15,20 +15,26 @@ defmodule BroadwayKafka.BrodClient do
     :begin_offset
   ]
 
+  @supported_fetch_config_options [
+    :max_bytes
+  ]
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts),
          {:ok, group_id} <- validate(opts, :group_id),
          {:ok, topics} <- validate(opts, :topics),
          {:ok, group_config} <- validate_group_config(opts),
-         {:ok, consumer_config} <- validate_consumer_config(opts) do
+         {:ok, consumer_config} <- validate_consumer_config(opts),
+         {:ok, fetch_config} <- validate_fetch_config(opts) do
       {:ok,
        %{
           hosts: hosts,
           group_id: group_id,
           topics: topics,
           consumer_config: consumer_config,
-          group_config: group_config
+          group_config: group_config,
+          fetch_config: fetch_config
        }}
     end
   end
@@ -49,6 +55,7 @@ defmodule BroadwayKafka.BrodClient do
   @impl true
   def ack(group_coordinator, generation_id, topic, partition, offset) do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
+    :brod_group_coordinator.commit_offsets(group_coordinator)
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, config) do
@@ -92,6 +99,13 @@ defmodule BroadwayKafka.BrodClient do
     consumer_config = opts[group] || []
     consumer_config
     |> validate_supported_opts(group, @supported_consumer_config_options)
+  end
+
+  defp validate_fetch_config(opts) do
+    group = :fetch_config
+    config = opts[group] || []
+    config
+    |> validate_supported_opts(group, @supported_fetch_config_options)
   end
 
   defp validate_supported_opts(opts, group_name, supported_opts) do

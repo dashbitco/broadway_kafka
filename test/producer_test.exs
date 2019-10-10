@@ -161,6 +161,54 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "messages from the same topic/partition are forwarded to the same processor" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, producers_stages: 2, processors_stages: 4)
+
+    producer_1 = get_producer(pid, 1)
+    producer_2 = get_producer(pid, 2)
+
+    put_assignments(producer_1, [
+      [topic: "topic_1", partition: 0, begin_offset: 100],
+      [topic: "topic_2", partition: 1, begin_offset: 400]
+    ])
+
+    put_assignments(producer_2, [
+      [topic: "topic_1", partition: 1, begin_offset: 200],
+      [topic: "topic_2", partition: 0, begin_offset: 300]
+    ])
+
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_1", partition: 0)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_1", partition: 1)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 0)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 1)
+
+    assert_receive {:ack, %{offset: 100, processor: processor_1}}
+    for offset <- 101..109 do
+      assert_receive {:ack,  %{offset: ^offset, processor: ^processor_1}}
+    end
+
+    assert_receive {:ack, %{offset: 200, processor: processor_2}}
+    for offset <- 201..209 do
+      assert_receive {:ack, %{offset: ^offset, processor: ^processor_2}}
+    end
+
+    assert_receive {:ack, %{offset: 300, processor: processor_3}}
+    for offset <- 301..309 do
+      assert_receive {:ack, %{offset: ^offset, processor: ^processor_3}}
+    end
+
+    assert_receive {:ack, %{offset: 400, processor: processor_4}}
+    for offset <- 401..409 do
+      assert_receive {:ack, %{offset: ^offset, processor: ^processor_4}}
+    end
+
+    processors = Enum.uniq([processor_1, processor_2, processor_3, processor_4])
+    assert length(processors) == 4
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_stages = Keyword.get(opts, :producers_stages, 1)
     processors_stages = Keyword.get(opts, :processors_stages, 1)
@@ -184,8 +232,8 @@ defmodule BroadwayKafka.ProducerTest do
   end
 
   defp put_assignments(producer, assignments) do
-    group_member_id = 123
-    group_generation_id = 456
+    group_member_id = System.unique_integer([:positive])
+    group_generation_id = System.unique_integer([:positive])
 
     kafka_assignments =
       for assignment <- assignments do
