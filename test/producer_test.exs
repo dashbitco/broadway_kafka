@@ -61,7 +61,7 @@ defmodule BroadwayKafka.ProducerTest do
 
     @impl true
     def ack(test_pid, _generation_id, topic, partition, offset) do
-      info = %{offset: offset, topic: topic, partition: partition, processor: self()}
+      info = %{offset: offset, topic: topic, partition: partition, pid: self()}
       send(test_pid, {:ack, info})
     end
   end
@@ -76,6 +76,22 @@ defmodule BroadwayKafka.ProducerTest do
 
     def handle_batch(_, messages, _, _) do
       messages
+    end
+  end
+
+  defmacro assert_receive_acks(pattern, opts) do
+    offsets = Keyword.fetch!(opts, :offsets)
+    timeout = Keyword.get(opts, :timeout, 200)
+
+    quote do
+      for offset <- unquote(offsets) do
+        receive do
+          {:ack, unquote(pattern) = received_message} ->
+            assert received_message.offset == offset
+        after unquote(timeout) ->
+          raise "No message matching #{unquote(Macro.to_string(pattern))} after #{unquote(timeout)}ms."
+        end
+      end
     end
   end
 
@@ -183,28 +199,82 @@ defmodule BroadwayKafka.ProducerTest do
     MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 0)
     MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 1)
 
-    assert_receive {:ack, %{offset: 100, processor: processor_1}}
-    for offset <- 101..109 do
-      assert_receive {:ack,  %{offset: ^offset, processor: ^processor_1}}
-    end
+    assert_receive {:ack, %{topic: "topic_1", partition: 0, pid: processor_1}}
+    assert_receive {:ack, %{topic: "topic_1", partition: 1, pid: processor_2}}
+    assert_receive {:ack, %{topic: "topic_2", partition: 0, pid: processor_3}}
+    assert_receive {:ack, %{topic: "topic_2", partition: 1, pid: processor_4}}
 
-    assert_receive {:ack, %{offset: 200, processor: processor_2}}
-    for offset <- 201..209 do
-      assert_receive {:ack, %{offset: ^offset, processor: ^processor_2}}
-    end
-
-    assert_receive {:ack, %{offset: 300, processor: processor_3}}
-    for offset <- 301..309 do
-      assert_receive {:ack, %{offset: ^offset, processor: ^processor_3}}
-    end
-
-    assert_receive {:ack, %{offset: 400, processor: processor_4}}
-    for offset <- 401..409 do
-      assert_receive {:ack, %{offset: ^offset, processor: ^processor_4}}
-    end
+    {_, consumer_name} = Process.info(processor_1, :registered_name)
+    assert to_string(consumer_name) =~ "Broadway.Processor_default"
 
     processors = Enum.uniq([processor_1, processor_2, processor_3, processor_4])
     assert length(processors) == 4
+
+    assert_receive_acks(
+      %{topic: "topic_1", partition: 0, pid: ^processor_1}, offsets: 101..109
+    )
+    assert_receive_acks(
+      %{topic: "topic_1", partition: 1, pid: ^processor_2}, offsets: 201..209
+    )
+    assert_receive_acks(
+      %{topic: "topic_2", partition: 0, pid: ^processor_3}, offsets: 301..309
+    )
+    assert_receive_acks(
+      %{topic: "topic_2", partition: 1, pid: ^processor_4}, offsets: 401..409
+    )
+
+    stop_broadway(pid)
+  end
+
+  test "messages from the same topic/partition are forwarded to the same batch consumer" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server,
+      producers_stages: 2,
+      processors_stages: 4,
+      batchers_stages: 4
+    )
+
+    producer_1 = get_producer(pid, 1)
+    producer_2 = get_producer(pid, 2)
+
+    put_assignments(producer_1, [
+      [topic: "topic_1", partition: 0, begin_offset: 100],
+      [topic: "topic_2", partition: 1, begin_offset: 400]
+    ])
+
+    put_assignments(producer_2, [
+      [topic: "topic_1", partition: 1, begin_offset: 200],
+      [topic: "topic_2", partition: 0, begin_offset: 300]
+    ])
+
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_1", partition: 0)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_1", partition: 1)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 0)
+    MessageServer.push_messages(message_server, 1..10, topic: "topic_2", partition: 1)
+
+    assert_receive {:ack, %{topic: "topic_1", partition: 0, pid: consumer_1}}
+    assert_receive {:ack, %{topic: "topic_1", partition: 1, pid: consumer_2}}
+    assert_receive {:ack, %{topic: "topic_2", partition: 0, pid: consumer_3}}
+    assert_receive {:ack, %{topic: "topic_2", partition: 1, pid: consumer_4}}
+
+    {_, consumer_name} = Process.info(consumer_1, :registered_name)
+    assert to_string(consumer_name) =~ "Broadway.Consumer_default"
+
+    processors = Enum.uniq([consumer_1, consumer_2, consumer_3, consumer_4])
+    assert length(processors) == 4
+
+    assert_receive_acks(
+      %{topic: "topic_1", partition: 0, pid: ^consumer_1}, offsets: 101..109
+    )
+    assert_receive_acks(
+      %{topic: "topic_1", partition: 1, pid: ^consumer_2}, offsets: 201..209
+    )
+    assert_receive_acks(
+      %{topic: "topic_2", partition: 0, pid: ^consumer_3}, offsets: 301..309
+    )
+    assert_receive_acks(
+      %{topic: "topic_2", partition: 1, pid: ^consumer_4}, offsets: 401..409
+    )
 
     stop_broadway(pid)
   end
@@ -212,6 +282,15 @@ defmodule BroadwayKafka.ProducerTest do
   defp start_broadway(message_server, opts \\ []) do
     producers_stages = Keyword.get(opts, :producers_stages, 1)
     processors_stages = Keyword.get(opts, :processors_stages, 1)
+    batchers_stages = Keyword.get(opts, :batchers_stages)
+
+    batchers =
+      if batchers_stages do
+        [default: [stages: batchers_stages, batch_timeout: 10]]
+      else
+        []
+      end
+
     Broadway.start_link(Forwarder,
       name: new_unique_name(),
       context: %{test_pid: self()},
@@ -227,7 +306,8 @@ defmodule BroadwayKafka.ProducerTest do
       ],
       processors: [
         default: [stages: processors_stages]
-      ]
+      ],
+      batchers: batchers
     )
   end
 

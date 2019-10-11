@@ -103,6 +103,58 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], state}
   end
 
+  @impl Acknowledger
+  def ack(key, successful, _failed) do
+    ack_messages(successful, key)
+  end
+
+  @impl Producer
+  def prepare_for_draining(_) do
+    :ok
+  end
+
+  @impl Producer
+  def prepare_for_start(_module, opts) do
+    broadway_name = opts[:name]
+
+    producers_stages = opts[:producer][:stages]
+    [first_processor_entry | other_processors_entries] = opts[:processors]
+
+    {allocator, updated_processor_entry} =
+      build_allocator_spec_and_consumer_entry(broadway_name, "processor", producers_stages, first_processor_entry)
+
+    {allocators, updated_batchers_entries} =
+      Enum.reduce(opts[:batchers], {[allocator], []}, fn entry, {allocators, entries} ->
+        {allocator, updated_entry} =
+          build_allocator_spec_and_consumer_entry(broadway_name, "batcher_consumer", producers_stages, entry)
+        {[allocator | allocators], [updated_entry | entries]}
+      end)
+
+    updated_opts =
+      opts
+      |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
+      |> Keyword.put(:batchers, updated_batchers_entries)
+
+    {allocators, updated_opts}
+  end
+
+  @impl :brod_group_member
+  def get_committed_offsets(_pid, _topics_partitions) do
+    {:ok, [], -1}
+  end
+
+  @impl :brod_group_member
+  def assignments_received(pid, _group_member_id, group_generation_id, received_assignments) do
+    send(pid, {:put_assignments, group_generation_id, received_assignments})
+    :ok
+  end
+
+  @impl :brod_group_member
+  def assignments_revoked(pid) do
+    send(pid, {:put_assignments, nil, []})
+    :ok
+  end
+
   defp handle_receive_messages(%{assignments: []} = state) do
     schedule_receive_messages(state.receive_interval)
     {:noreply, [], state}
@@ -184,7 +236,7 @@ defmodule BroadwayKafka.Producer do
             wrap_message(msg, topic, partition, generation_id, group_coordinator, client)
           end)
         # TODO: This is suboptimal. It works for now but we need to find out why the
-        # `new_offeset` returned by `:brod_utils.fetch/5` doesn't increment the value
+        # `new_offeset` returned by `:brod_utils.fetch/5` doesn't increment the offset
         # properly sometimes. That's why we're retrieving from the last message for now.
         # In case we can't find a solution and we have to keep this, let's at least
         # replace the `map` above with a `reduce` so we traverse the list only once.
@@ -240,58 +292,6 @@ defmodule BroadwayKafka.Producer do
         #TODO
         raise "Setup failed: #{inspect(error)}"
     end
-  end
-
-  @impl Acknowledger
-  def ack(key, successful, _failed) do
-    ack_messages(successful, key)
-  end
-
-  @impl Producer
-  def prepare_for_draining(_) do
-    :ok
-  end
-
-  @impl Producer
-  def prepare_for_start(_module, opts) do
-    broadway_name = opts[:name]
-
-    producers_stages = opts[:producer][:stages]
-    [first_processor_entry | other_processors_entries] = opts[:processors]
-
-    {allocator, updated_processor_entry} =
-      build_allocator_spec_and_consumer_entry(broadway_name, "processor", producers_stages, first_processor_entry)
-
-    {allocators, updated_batchers_entries} =
-      Enum.reduce(opts[:batchers], {[allocator], []}, fn entry, {allocators, entries} ->
-        {allocator, updated_entry} =
-          build_allocator_spec_and_consumer_entry(broadway_name, "batcher_consumer", producers_stages, entry)
-        {[allocator | allocators], [updated_entry | entries]}
-      end)
-
-    updated_opts =
-      opts
-      |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
-      |> Keyword.put(:batchers, updated_batchers_entries)
-
-    {allocators, updated_opts}
-  end
-
-  @impl :brod_group_member
-  def get_committed_offsets(_pid, _topics_partitions) do
-    {:ok, [], -1}
-  end
-
-  @impl :brod_group_member
-  def assignments_received(pid, _group_member_id, group_generation_id, received_assignments) do
-    send(pid, {:put_assignments, group_generation_id, received_assignments})
-    :ok
-  end
-
-  @impl :brod_group_member
-  def assignments_revoked(pid) do
-    send(pid, {:put_assignments, nil, []})
-    :ok
   end
 
   defp build_allocator_spec_and_consumer_entry(broadway_name, prefix, producers_stages, consumer_entry) do
