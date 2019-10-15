@@ -37,10 +37,10 @@ defmodule BroadwayKafka.Producer do
           receive_interval: receive_interval,
           assignments: [],
           config: config,
-          broadway_index: opts[:broadway_index],
-          processors_name: opts[:processors_name],
-          batchers_names: opts[:batchers_names],
-          broadway_name: opts[:broadway_name]
+          broadway_index: opts[:broadway][:index],
+          broadway_name: opts[:broadway][:name],
+          processors_names: Keyword.keys(opts[:broadway][:processors]),
+          batchers_names: Keyword.keys(opts[:broadway][:batchers])
         }
         {:producer, connect(state)}
     end
@@ -84,9 +84,9 @@ defmodule BroadwayKafka.Producer do
 
     broadway_name = state.broadway_name
 
-    group_name = state.processors_name
+    [processor_name | _] = state.processors_names
     broadway_index = state.broadway_index
-    allocator_name = Module.concat([broadway_name, "Allocator_processor_#{group_name}"])
+    allocator_name = Module.concat([broadway_name, "Allocator_processor_#{processor_name}"])
     Allocator.allocate(allocator_name, broadway_index, Enum.map(assignments, & &1.key))
 
     for name <- state.batchers_names do

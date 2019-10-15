@@ -1,5 +1,5 @@
 %{
-  "broadway": {:git, "https://github.com/plataformatec/broadway.git", "f4a7aab2c5c870df8c747b34404ecf034625c5d2", [branch: "ms-process-partition"]},
+  "broadway": {:git, "https://github.com/plataformatec/broadway.git", "b0309124590703bca23af54fe2a6eaaa73780a87", [branch: "ms-process-partition"]},
   "brod": {:hex, :brod, "3.8.1", "74426e2d27989cd7f973599bc209c899dca8588068d27a2a37ca1b4bf8823c2a", [:make, :rebar, :rebar3], [{:kafka_protocol, "2.2.9", [hex: :kafka_protocol, repo: "hexpm", optional: false]}, {:supervisor3, "1.1.8", [hex: :supervisor3, repo: "hexpm", optional: false]}], "hexpm"},
   "crc32cer": {:hex, :crc32cer, "0.1.3", "8984906c4b4fae6aa292c48f286a1c83b19ad44bd102287acb94d696015967ce", [:make, :rebar, :rebar3], [], "hexpm"},
   "gen_stage": {:hex, :gen_stage, "0.14.2", "6a2a578a510c5bfca8a45e6b27552f613b41cf584b58210f017088d3d17d0b14", [:mix], [], "hexpm"},

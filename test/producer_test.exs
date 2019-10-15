@@ -181,8 +181,8 @@ defmodule BroadwayKafka.ProducerTest do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server, producers_stages: 2, processors_stages: 4)
 
-    producer_1 = get_producer(pid, 1)
-    producer_2 = get_producer(pid, 2)
+    producer_1 = get_producer(pid, 0)
+    producer_2 = get_producer(pid, 1)
 
     put_assignments(producer_1, [
       [topic: "topic_1", partition: 0, begin_offset: 100],
@@ -234,8 +234,8 @@ defmodule BroadwayKafka.ProducerTest do
       batchers_stages: 4
     )
 
-    producer_1 = get_producer(pid, 1)
-    producer_2 = get_producer(pid, 2)
+    producer_1 = get_producer(pid, 0)
+    producer_2 = get_producer(pid, 1)
 
     put_assignments(producer_1, [
       [topic: "topic_1", partition: 0, begin_offset: 100],
@@ -327,7 +327,7 @@ defmodule BroadwayKafka.ProducerTest do
     :"Broadway#{System.unique_integer([:positive, :monotonic])}"
   end
 
-  defp get_producer(broadway, index \\ 1) do
+  defp get_producer(broadway, index \\ 0) do
     {_, name} = Process.info(broadway, :registered_name)
     :"#{name}.Broadway.Producer_#{index}"
   end
