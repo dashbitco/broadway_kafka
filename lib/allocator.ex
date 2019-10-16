@@ -41,9 +41,16 @@ defmodule BroadwayKafka.Allocator do
   def init({name, producers, processors}) when producers > 0 and processors > 0 do
     partitions = for i <- 0..(processors - 1), into: %{}, do: {i, %{}}
     producers = for i <- 0..(producers - 1), into: %{}, do: {i, %{}}
+    old_producers = producers
     keys = :ets.new(name, [:named_table, :set, :protected, read_concurrency: true])
     old_keys = %{}
-    {:ok, {producers, producers, partitions, keys, old_keys}}
+
+    # `producers` - a map from the producer index to all partitions it holds
+    # `old_producers` - a map from the producer index to all partitions it previously held
+    # `partitions` - a map with the processor index pointing with a map as set of partitions
+    # `keys` - an ets set from the partition pointing to the processor index
+    # `keys` - a map from the partition pointing to its previous processor index
+    {:ok, {producers, old_producers, partitions, keys, old_keys}}
   end
 
   @impl true
