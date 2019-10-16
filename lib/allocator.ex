@@ -49,7 +49,7 @@ defmodule BroadwayKafka.Allocator do
     # `old_producers` - a map from the producer index to all partitions it previously held
     # `partitions` - a map with the processor index pointing with a map as set of partitions
     # `keys` - an ets set from the partition pointing to the processor index
-    # `keys` - a map from the partition pointing to its previous processor index
+    # `old_keys` - a map from the partition pointing to its previous processor index
     {:ok, {producers, old_producers, partitions, keys, old_keys}}
   end
 
