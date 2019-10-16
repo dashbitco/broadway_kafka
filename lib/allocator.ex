@@ -1,6 +1,14 @@
 defmodule BroadwayKafka.Allocator do
   @moduledoc false
 
+  # The allocator is responsible to allocate Kafka partitions
+  # for each layer of stages in Broadway. We have an allocator
+  # for each processor (vertical) and an allocator for each
+  # batcher (horizontal).
+  #
+  # The allocator is stateful, as it must avoid rellocations,
+  # as that would imply lost of ordering.
+
   use GenServer
 
   @doc """
@@ -62,7 +70,7 @@ defmodule BroadwayKafka.Allocator do
 
     # We remove the current entries that are no longer used
     to_remove_entries = Enum.reject(current_entries, &in_a_producer?(producers, &1))
-    partitions = remove_current(to_remove_entries, partitions, keys)
+    partitions = remove_unused(to_remove_entries, partitions, keys)
 
     # We remove the old entries that are no longer used
     fun = &(in_a_producer?(producers, &1) or in_a_producer?(old_producers, &1))
@@ -77,25 +85,10 @@ defmodule BroadwayKafka.Allocator do
 
     # We first assign the ones that we know the location
     # so we can do a better distribution for the unseen ones
-    partitions =
-      Enum.reduce(seen_entries, partitions, fn entry, partitions ->
-        partition = Map.fetch!(old_keys, entry)
-        :ets.insert(keys, {entry, partition})
-        put_in(partitions[partition][entry], true)
-      end)
+    partitions = assign_seen_entries(seen_entries, partitions, old_keys, keys)
 
-    # Now we sort the partitions and assign unseen ones
-    sorted = sort_partitions_by_allocation(partitions)
-
-    {_, partitions, old_keys} =
-      Enum.reduce(unseen_entries, {sorted, partitions, old_keys}, fn
-        entry, {[{size, partition} | sorted], partitions, old_keys} ->
-          sorted = add_to_sorted({size + 1, partition}, sorted)
-          partitions = put_in(partitions[partition][entry], true)
-          old_keys = put_in(old_keys[entry], partition)
-          :ets.insert(keys, {entry, partition})
-          {sorted, partitions, old_keys}
-      end)
+    # Now we assign unseen ones
+    {_, partitions, old_keys} = assign_unseen_entries(unseen_entries, partitions, old_keys, keys)
 
     {:reply, :ok, {producers, old_producers, partitions, keys, old_keys}}
   end
@@ -104,11 +97,33 @@ defmodule BroadwayKafka.Allocator do
     Enum.any?(producers, fn {_, entries} -> entry in entries end)
   end
 
-  defp remove_current(to_remove, partitions, keys) do
+  defp remove_unused(to_remove, partitions, keys) do
     Enum.reduce(to_remove, partitions, fn entry, partitions ->
       [{^entry, partition}] = :ets.take(keys, entry)
       {true, partitions} = pop_in(partitions[partition][entry])
       partitions
+    end)
+  end
+
+  defp assign_seen_entries(seen_entries, partitions, old_keys, keys) do
+    Enum.reduce(seen_entries, partitions, fn entry, partitions ->
+      partition = Map.fetch!(old_keys, entry)
+      :ets.insert(keys, {entry, partition})
+      put_in(partitions[partition][entry], true)
+    end)
+  end
+
+  defp assign_unseen_entries(unseen_entries, partitions, old_keys, keys) do
+    # Get the partitions with fewer allocations first and assign from there
+    sorted = sort_partitions_by_allocation(partitions)
+
+    Enum.reduce(unseen_entries, {sorted, partitions, old_keys}, fn
+      entry, {[{size, partition} | sorted], partitions, old_keys} ->
+        sorted = add_to_sorted({size + 1, partition}, sorted)
+        partitions = put_in(partitions[partition][entry], true)
+        old_keys = put_in(old_keys[entry], partition)
+        :ets.insert(keys, {entry, partition})
+        {sorted, partitions, old_keys}
     end)
   end
 

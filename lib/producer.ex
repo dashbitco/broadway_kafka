@@ -119,6 +119,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl Producer
   def prepare_for_draining(_) do
+    # TODO: Implement draining or document why one is not necessary.
     :ok
   end
 
@@ -308,6 +309,7 @@ defmodule BroadwayKafka.Producer do
     consumer_stages = consumer_config[:stages]
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])
     partition_by = &Allocator.fetch!(allocator_name, {&1.metadata.topic, &1.metadata.partition})
+    # TODO: we should raise if the user set the partition_by themselves
     new_config = Keyword.put(consumer_config, :partition_by, partition_by)
     allocator = {BroadwayKafka.Allocator, {allocator_name, producers_stages, consumer_stages}}
     allocator_spec = Supervisor.child_spec(allocator, id: allocator_name)
