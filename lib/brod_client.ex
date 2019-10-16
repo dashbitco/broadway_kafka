@@ -89,26 +89,20 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   defp validate_group_config(opts) do
-    group = :group_config
-    group_config = opts[group] || []
-    validate_supported_opts(group_config, group, @supported_group_config_options)
+    validate_supported_opts(opts, :group_config, @supported_group_config_options)
   end
 
   defp validate_consumer_config(opts) do
-    group = :consumer_config
-    consumer_config = opts[group] || []
-    consumer_config
-    |> validate_supported_opts(group, @supported_consumer_config_options)
+    validate_supported_opts(opts, :consumer_config, @supported_consumer_config_options)
   end
 
   defp validate_fetch_config(opts) do
-    group = :fetch_config
-    config = opts[group] || []
-    config
-    |> validate_supported_opts(group, @supported_fetch_config_options)
+    validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options)
   end
 
-  defp validate_supported_opts(opts, group_name, supported_opts) do
+  defp validate_supported_opts(all_opts, group_name, supported_opts) do
+    opts = Keyword.get(all_opts, group_name, [])
+
     opts
     |> Keyword.keys()
     |> Enum.reject(fn k -> k in supported_opts end)

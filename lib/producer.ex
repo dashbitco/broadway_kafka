@@ -82,6 +82,11 @@ defmodule BroadwayKafka.Producer do
         }
       end)
 
+    # TODO: Update this to broadway master. Note on master
+    # it will receive the same options as prepare_for_start
+    # but under the broadway key, so it may be possible that
+    # you can share some of this functionality (such as naming)
+    # with prepare_for_start.
     broadway_name = state.broadway_name
 
     [processor_name | _] = state.processors_names
@@ -105,6 +110,10 @@ defmodule BroadwayKafka.Producer do
 
   @impl Acknowledger
   def ack(key, successful, _failed) do
+    # TODO: Shouldn't we also ack failed messages? Otherwise if all messages in
+    # a partition fail... we will replay them. But if only some fail, we don't
+    # replay. My suggestion is to add something `on_failure: {m, f, args}` so
+    # people can move it elsewhere in case of failures, then we ack after.
     ack_messages(successful, key)
   end
 
@@ -310,6 +319,7 @@ defmodule BroadwayKafka.Producer do
     Enum.each(messages, fn msg ->
       {_, _, ack_data} = msg.acknowledger
 
+      # TODO: Can some of those terms be moved to the TermStorage?
       try do
         %{group_coordinator: group_coordinator, generation_id: generation_id, offset: offset, client: client} = ack_data
         client.ack(group_coordinator, generation_id, topic, partition, offset)
