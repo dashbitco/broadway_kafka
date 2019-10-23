@@ -6,6 +6,7 @@ defmodule BroadwayKafka.Producer do
 
   alias Broadway.{Message, Acknowledger, Producer}
   alias BroadwayKafka.Allocator
+  alias BroadwayKafka.Assignments
 
   @behaviour Acknowledger
   @behaviour Producer
@@ -32,15 +33,17 @@ defmodule BroadwayKafka.Producer do
           client: client,
           client_id: client_id,
           group_coordinator: nil,
-          demand: 0,
           receive_timer: nil,
           receive_interval: receive_interval,
-          assignments: [],
+          assignments: Assignments.new,
           config: config,
           broadway_index: opts[:broadway][:index],
           broadway_name: opts[:broadway][:name],
           processors_names: Keyword.keys(opts[:broadway][:processors]),
-          batchers_names: Keyword.keys(opts[:broadway][:batchers])
+          batchers_names: Keyword.keys(opts[:broadway][:batchers]),
+          draining: false,
+          drain_caller: nil,
+          demand: 0
         }
         {:producer, connect(state)}
     end
@@ -52,13 +55,43 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_info(:receive_messages, state) do
-    handle_receive_messages(%{state | receive_timer: nil})
+  def handle_call({:offset_acked, offset, topic_partition}, _from, state) do
+    assignments = Assignments.update_last_acked_offset(state.assignments, topic_partition, offset)
+
+    new_state =
+      if state.draining && Assignments.drained?(assignments) do
+        GenStage.reply(state.drain_caller, :ok)
+        %{state | draining: false, drain_caller: nil, assignments: Assignments.new}
+      else
+        %{state | assignments: assignments}
+      end
+
+    {:reply, :ok, [], new_state}
   end
 
   @impl GenStage
-  def handle_info({:put_assignments, _group_generation_id, []}, state) do
-    {:noreply, [], %{state | assignments: []}}
+  def handle_call(:drain_messages, _from, %{draining: true} = state) do
+    {:reply, :ok, [], state}
+  end
+
+  @impl GenStage
+  def handle_call(:drain_messages, from, state) do
+    IO.puts "DRAIN MESSAGES"
+    if Assignments.drained?(state.assignments) do
+      {:reply, :ok, [], %{state | assignments: Assignments.new}}
+    else
+      {:noreply, [], %{state | draining: true, drain_caller: from}}
+    end
+  end
+
+  @impl GenStage
+  def handle_info(:receive_messages, %{assignments: %{map: map}} = state) when map == %{} do
+    {:noreply, [], %{state | receive_timer: nil}}
+  end
+
+  @impl GenStage
+  def handle_info(:receive_messages, state) do
+    handle_receive_messages(%{state | receive_timer: nil})
   end
 
   @impl GenStage
@@ -75,10 +108,9 @@ defmodule BroadwayKafka.Producer do
           generation_id: group_generation_id,
           topic: topic,
           partition: partition,
-          begin_offset: begin_offset,
           offset: begin_offset,
-          key: {topic, partition},
-          pending_messages: []
+          last_acked_offset: nil,
+          key: {topic, partition}
         }
       end)
 
@@ -100,7 +132,8 @@ defmodule BroadwayKafka.Producer do
     end
 
     schedule_receive_messages(0)
-    {:noreply, [], %{state | assignments: assignments}}
+
+    {:noreply, [], %{state | assignments: Assignments.add(state.assignments, assignments)}}
   end
 
   @impl GenStage
@@ -155,71 +188,58 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def assignments_received(pid, _group_member_id, group_generation_id, received_assignments) do
+    IO.puts "ASSIGNMETNS RECEIVED"
     send(pid, {:put_assignments, group_generation_id, received_assignments})
     :ok
   end
 
   @impl :brod_group_member
-  def assignments_revoked(pid) do
-    send(pid, {:put_assignments, nil, []})
+  def assignments_revoked(producer_pid) do
+    IO.puts "ASSIGNMETNS REVOKED"
+    GenStage.call(producer_pid, :drain_messages, :infinity)
     :ok
   end
 
-  defp handle_receive_messages(%{assignments: []} = state) do
-    schedule_receive_messages(state.receive_interval)
+  defp handle_receive_messages(%{assignments: %{map: map}} = state) when map == %{} do
+    IO.puts "handle_receive_messages with no assigns"
     {:noreply, [], state}
   end
 
   defp handle_receive_messages(%{receive_timer: nil, demand: demand} = state) when demand > 0 do
-    %{assignments: assignments} = state
+    {assignment, assignments} = Assignments.next(state.assignments)
+    {messages, n_messages, new_offset} = fetch_messages_from_kafka(state, assignment)
 
-    [assignment | other_assignments] = assignments
-
-    {messages, pending_messages, new_offset, new_demand} = fetch_messages(state, assignment, demand)
-
-    updated_assignment = %{assignment | pending_messages: pending_messages, offset: new_offset}
+    new_demand = max(0, demand - n_messages)
 
     receive_timer =
       case {messages, new_demand} do
-        {[], _} -> schedule_receive_messages(state.receive_interval)
-        {_, 0} -> nil
-        _ -> schedule_receive_messages(0)
+        {[], _} ->
+          IO.puts("scheduling for #{state.receive_interval}ms since no messages fetched")
+          schedule_receive_messages(state.receive_interval)
+        {_, 0} ->
+          nil
+        _ ->
+          schedule_receive_messages(0)
       end
 
     new_state =
       %{state |
-        demand: new_demand,
         receive_timer: receive_timer,
-        assignments: other_assignments ++ [updated_assignment]
+        assignments: Assignments.update_offset(assignments, assignment.key, new_offset),
+        demand: new_demand
       }
+
     {:noreply, messages, new_state}
   end
 
   defp handle_receive_messages(state) do
+    IO.puts "handle_receive_messages with receive_timer != nil"
     {:noreply, [], state}
   end
 
-  defp fetch_messages(state, assignment, demand) do
-    %{offset: offset, pending_messages: pending_messages} = assignment
-
-    case fetch_pending_message(pending_messages, [], demand) do
-      {messages, new_pending_messages, 0} ->
-        {messages, new_pending_messages, offset, 0}
-
-      {messages, [], new_demand} ->
-        {fetched_messages, new_offset} = fetch_messages_from_kafka(state, assignment)
-        {messages, new_pending_messages, new_demand} =
-          fetch_pending_message(fetched_messages, Enum.reverse(messages), new_demand)
-        {messages, new_pending_messages, new_offset, new_demand}
-    end
-  end
-
-  defp fetch_pending_message([message | pending_messages], messages, demand) when demand > 0 do
-    fetch_pending_message(pending_messages, [message | messages], demand - 1)
-  end
-
-  defp fetch_pending_message(pending_messages, messages, demand) do
-    {Enum.reverse(messages), pending_messages, demand}
+  defp fetch_messages_from_kafka(%{draining: true}, assignment) do
+    IO.puts "fetch_messages_from_kafka with draining=true"
+    {[], 0, assignment.offset}
   end
 
   defp fetch_messages_from_kafka(state, assignment) do
@@ -237,33 +257,28 @@ defmodule BroadwayKafka.Producer do
       offset: offset
     } = assignment
 
+    # TODO: convert to map on `init/1`
     fetch_config_map = Map.new(config[:fetch_config] || [])
 
+    IO.puts "Fetching messages for {#{topic}, #{partition}} from offset #{offset}"
     case client.fetch(client_id, topic, partition, offset, fetch_config_map, config) do
-      {:ok, {_new_offset, messages}} ->
-        messages =
-          Enum.map(messages, fn msg ->
-            wrap_message(msg, topic, partition, generation_id, group_coordinator, client)
+      # TODO: We need to find out why the `new_offeset` returned by `:brod_utils.fetch/5`
+      # doesn't increment the offset properly sometimes. That's why we're retrieving it
+      # from the last message for now.
+      {:ok, {_new_offset, kafka_messages}} ->
+        {messages, n_messages, new_offset} =
+          Enum.reduce(kafka_messages, {[], 0, offset}, fn k_msg, {messages, count, _new_offset} ->
+            msg = wrap_message(k_msg, topic, partition, generation_id, group_coordinator, client)
+            {[msg | messages], count + 1, msg.metadata.offset + 1}
           end)
-        # TODO: This is suboptimal. It works for now but we need to find out why the
-        # `new_offeset` returned by `:brod_utils.fetch/5` doesn't increment the offset
-        # properly sometimes. That's why we're retrieving from the last message for now.
-        # In case we can't find a solution and we have to keep this, let's at least
-        # replace the `map` above with a `reduce` so we traverse the list only once.
-        new_offset =
-          if messages == [] do
-            offset
-          else
-            last = List.last(messages)
-            {_, _, %{offset: last_offset}} = last.acknowledger
-            last_offset + 1
-          end
-        {messages, new_offset}
+
+        IO.inspect(%{key: {topic, partition}, offset: offset, new_offset: new_offset, length: n_messages}, label: "FETCHED")
+        {Enum.reverse(messages), n_messages, new_offset}
 
       {:error, reason} ->
         # TODO: Treat the error properly
         IO.inspect(reason, label: "ERROR")
-        {[], offset}
+        {[], 0, offset}
     end
   end
 
@@ -274,13 +289,14 @@ defmodule BroadwayKafka.Producer do
       generation_id: generation_id,
       group_coordinator: group_coordinator,
       offset: offset,
-      client: client
+      client: client,
+      producer_pid: self()
     }
 
     message =
       %Message{
         data: data,
-        metadata: %{topic: topic, partition: partition, key: key, ts: ts},
+        metadata: %{topic: topic, partition: partition, offset: offset, key: key, ts: ts},
         acknowledger: {__MODULE__, {topic, partition}, ack_data}
       }
 
@@ -323,8 +339,16 @@ defmodule BroadwayKafka.Producer do
 
       # TODO: Can some of those terms be moved to the TermStorage?
       try do
-        %{group_coordinator: group_coordinator, generation_id: generation_id, offset: offset, client: client} = ack_data
+        %{
+          group_coordinator: group_coordinator,
+          generation_id: generation_id,
+          offset: offset,
+          client: client,
+          producer_pid: producer_pid
+        } = ack_data
+
         client.ack(group_coordinator, generation_id, topic, partition, offset)
+        GenServer.call(producer_pid, {:offset_acked, offset, {topic, partition}})
       catch
         kind, reason ->
           Logger.error(Exception.format(kind, reason, System.stacktrace()))

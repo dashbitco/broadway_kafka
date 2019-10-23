@@ -279,6 +279,23 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "continue fetching messages after rebalancing" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+    producer = get_producer(pid)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+
+    assert_receive {:messages_fetched, 0}
+
+    BroadwayKafka.Producer.assignments_revoked(producer)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+
+    assert_receive {:messages_fetched, 0}
+    assert_receive {:messages_fetched, 0}
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_stages = Keyword.get(opts, :producers_stages, 1)
     processors_stages = Keyword.get(opts, :processors_stages, 1)
@@ -299,7 +316,7 @@ defmodule BroadwayKafka.ProducerTest do
           client: FakeKafkaClient,
           test_pid: self(),
           message_server: message_server,
-          receive_interval: 0,
+          receive_interval: 30,
           max_bytes: 10
         ]},
         stages: producers_stages
