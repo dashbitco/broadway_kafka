@@ -60,6 +60,7 @@ defmodule BroadwayKafka.Producer do
 
     new_state =
       if state.draining && Assignments.drained?(assignments) do
+        IO.puts("END DRAINING #{inspect(topic_partition)}. Offset: #{offset}")
         GenStage.reply(state.drain_caller, :ok)
         %{state | draining: false, drain_caller: nil, assignments: Assignments.new}
       else
@@ -76,8 +77,10 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_call(:drain_messages, from, state) do
-    IO.puts "DRAIN MESSAGES"
+    {_, producer_name} = Process.info(self(), :registered_name)
+    IO.puts "DRAIN MESSAGES on #{producer_name}"
     if Assignments.drained?(state.assignments) do
+      IO.inspect(state.assignments, label: "Current assignments")
       {:reply, :ok, [], %{state | assignments: Assignments.new}}
     else
       {:noreply, [], %{state | draining: true, drain_caller: from}}
@@ -108,7 +111,8 @@ defmodule BroadwayKafka.Producer do
           generation_id: group_generation_id,
           topic: topic,
           partition: partition,
-          offset: begin_offset,
+          # TODO: Is it guaranteed that we can always send `0` for new topics?
+          offset: (if begin_offset == :undefined, do: 0, else: begin_offset),
           last_acked_offset: nil,
           key: {topic, partition}
         }
@@ -262,10 +266,7 @@ defmodule BroadwayKafka.Producer do
 
     IO.puts "Fetching messages for {#{topic}, #{partition}} from offset #{offset}"
     case client.fetch(client_id, topic, partition, offset, fetch_config_map, config) do
-      # TODO: We need to find out why the `new_offeset` returned by `:brod_utils.fetch/5`
-      # doesn't increment the offset properly sometimes. That's why we're retrieving it
-      # from the last message for now.
-      {:ok, {_new_offset, kafka_messages}} ->
+      {:ok, {_watermark_offset, kafka_messages}} ->
         {messages, n_messages, new_offset} =
           Enum.reduce(kafka_messages, {[], 0, offset}, fn k_msg, {messages, count, _new_offset} ->
             msg = wrap_message(k_msg, topic, partition, generation_id, group_coordinator, client)

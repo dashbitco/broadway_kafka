@@ -49,14 +49,13 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def fetch(client_id, topic, partition, offset, opts, _config) do
+    # TODO: Use :brod.fetch instead
     :brod_utils.fetch(client_id, topic, partition, offset, opts)
   end
 
   @impl true
   def ack(group_coordinator, generation_id, topic, partition, offset) do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
-    # TODO: ???
-    # :brod_group_coordinator.commit_offsets(group_coordinator)
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, config) do
