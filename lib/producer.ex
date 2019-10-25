@@ -55,12 +55,12 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_call({:offset_acked, offset, topic_partition}, _from, state) do
-    assignments = Assignments.update_last_acked_offset(state.assignments, topic_partition, offset)
+  def handle_call({:offset_acked, offset, key}, _from, state) do
+    assignments = Assignments.update_last_acked_offset(state.assignments, key, offset)
 
     new_state =
       if state.draining && Assignments.drained?(assignments) do
-        IO.puts("END DRAINING #{inspect(topic_partition)}. Offset: #{offset}")
+        IO.puts("END DRAINING #{inspect(key)}. Offset: #{offset}")
         GenStage.reply(state.drain_caller, :ok)
         %{state | draining: false, drain_caller: nil, assignments: Assignments.new}
       else
@@ -114,7 +114,7 @@ defmodule BroadwayKafka.Producer do
           # TODO: Is it guaranteed that we can always send `0` for new topics?
           offset: (if begin_offset == :undefined, do: 0, else: begin_offset),
           last_acked_offset: nil,
-          key: {topic, partition}
+          key: {group_generation_id, topic, partition}
         }
       end)
 
@@ -128,11 +128,11 @@ defmodule BroadwayKafka.Producer do
     [processor_name | _] = state.processors_names
     broadway_index = state.broadway_index
     allocator_name = Module.concat([broadway_name, "Allocator_processor_#{processor_name}"])
-    Allocator.allocate(allocator_name, broadway_index, Enum.map(assignments, & &1.key))
+    Allocator.allocate(allocator_name, broadway_index, Enum.map(assignments, &{&1.topic, &1.partition}))
 
     for name <- state.batchers_names do
       allocator_name = Module.concat([broadway_name, "Allocator_batcher_consumer_#{name}"])
-      Allocator.allocate(allocator_name, broadway_index, Enum.map(assignments, & &1.key))
+      Allocator.allocate(allocator_name, broadway_index, Enum.map(assignments, &{&1.topic, &1.partition}))
     end
 
     schedule_receive_messages(0)
@@ -298,7 +298,7 @@ defmodule BroadwayKafka.Producer do
       %Message{
         data: data,
         metadata: %{topic: topic, partition: partition, offset: offset, key: key, ts: ts},
-        acknowledger: {__MODULE__, {topic, partition}, ack_data}
+        acknowledger: {__MODULE__, {generation_id, topic, partition}, ack_data}
       }
 
     Message.put_batch_key(message, {topic, partition})
@@ -334,7 +334,7 @@ defmodule BroadwayKafka.Producer do
     {allocator_spec, {consumer_name, new_config}}
   end
 
-  defp ack_messages(messages, {topic, partition}) do
+  defp ack_messages(messages, {generation_id, topic, partition}) do
     Enum.each(messages, fn msg ->
       {_, _, ack_data} = msg.acknowledger
 
@@ -342,14 +342,13 @@ defmodule BroadwayKafka.Producer do
       try do
         %{
           group_coordinator: group_coordinator,
-          generation_id: generation_id,
           offset: offset,
           client: client,
           producer_pid: producer_pid
         } = ack_data
 
         client.ack(group_coordinator, generation_id, topic, partition, offset)
-        GenServer.call(producer_pid, {:offset_acked, offset, {topic, partition}})
+        GenServer.call(producer_pid, {:offset_acked, offset, {generation_id, topic, partition}})
       catch
         kind, reason ->
           Logger.error(Exception.format(kind, reason, System.stacktrace()))
