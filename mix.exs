@@ -21,8 +21,8 @@ defmodule BroadwayKafka.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:broadway, git: "https://github.com/plataformatec/broadway.git", branch: "ms-process-partition"},
-      {:brod, "~> 3.8"}
+      {:broadway, git: "https://github.com/plataformatec/broadway.git"},
+      {:brod, git: "https://github.com/josevalim/brod.git", branch: "patch-1"},
     ]
   end
 end

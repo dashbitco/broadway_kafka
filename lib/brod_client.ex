@@ -64,6 +64,7 @@ defmodule BroadwayKafka.BrodClient do
       config.group_id,
       config.topics,
       config.group_config,
+      # TODO: pass as a parameter
       BroadwayKafka.Producer,
       stage_pid
     )
