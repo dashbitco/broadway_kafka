@@ -41,7 +41,7 @@ defmodule BroadwayKafka.ProducerTest do
     def init(opts), do: {:ok, opts}
 
     @impl true
-    def setup(_stage_pid, _client_id, config) do
+    def setup(_stage_pid, _client_id, _callback_module, config) do
       {:ok, config[:test_pid]}
     end
 

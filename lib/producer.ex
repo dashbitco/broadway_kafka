@@ -1,4 +1,77 @@
 defmodule BroadwayKafka.Producer do
+  @moduledoc """
+  A Kafka producer for Broadway that consumes messages from a Kafka consumer group.
+
+  ## Options
+
+    * `:hosts` - Required. A keyword list of host/port pairs to use for establishing the
+       initial connection to Kafka, e.g. [localhost: 9092].
+
+    * `:group_id` - Required. A unique string that identifies the consumer group the
+       producer will belong to.
+
+    * `:topics` - Required. A list of topics or a keyword list of topic/partition that
+      the producer will subscribe to.
+
+    * `:receive_interval` - Optional. The duration (in milliseconds) for which the producer
+      waits before making a request for more messages. Default is 2000 (2 seconds).
+
+    * `:group_config` - Optional. A list of options used to configure the group
+      coordinator. See the "Group config options" section below for a list of all available
+      options.
+
+    * `:fetch_config` - Optional. A list of options used when fetching messages. See the
+      "Fetch config options" section below for a list of all available options.
+
+  ## Group config options
+
+  The avaiable options that will be passed to `:brod`'s group coordinator.
+
+    * `:offset_commit_interval_seconds` - Optional. The time interval between two
+       OffsetCommitRequest messages. Default is 5.
+
+    * `:rejoin_delay_seconds` - Delay in seconds before re-joining the group. Default is 1.
+
+  ## Fetch config options
+
+  The avaiable options that will be internally passed to `:brod.fetch/5`.
+
+    * `:min_bytes` - Optional. The minimum amount of data to be fetched from the server.
+      If not enough data is available the request will wait for that much data to accumulate
+      before answering. Default is 1 byte. Setting this value greater than 1 can improve
+      server throughput a bit at the cost of additional latency.
+
+    * `:max_bytes` - Optional. The maximum amount of data to be fetched from the server.
+      Default is 1048576 (1 MiB).
+
+  > Note: Currently, Broadway does not support all options avaiable for `:brod`. If you
+  have a scenario where you need any extra option that is not listed above, please open an
+  issue, so we can consider adding it.
+
+  ## Example
+
+      Broadway.start_link(MyBroadway,
+        name: MyBroadway,
+        producer: [
+          module: {BroadwayKafka.Producer, [
+            hosts: [localhost: 9092],
+            group_id: "group_1",
+            topics: ["test"],
+            receive_interval: 1000,
+            group_config: [
+              offset_commit_interval_seconds: 5,
+              rejoin_delay_seconds: 2
+            ]
+          ]},
+          stages: 5
+        ],
+        processors: [
+          default: []
+        ]
+      )
+  """
+
+
   use GenStage
 
   require Logger
@@ -44,7 +117,7 @@ defmodule BroadwayKafka.Producer do
           drain_caller: nil,
           demand: 0
         }
-        {:producer, connect(state)}
+        {:producer, connect(state), buffer_size: :infinity}
     end
   end
 
@@ -234,11 +307,7 @@ defmodule BroadwayKafka.Producer do
 
     {generation_id, topic, partition} = key
 
-    # TODO: convert to map on `init/1`
-    # TODO: calculate `max_bytes / count_acks`and save in the state
-    fetch_config_map = Map.new(config[:fetch_config] || [])
-
-    case client.fetch(client_id, topic, partition, offset, fetch_config_map, config) do
+    case client.fetch(client_id, topic, partition, offset, config[:fetch_config], config) do
       {:ok, {_watermark_offset, kafka_messages}} ->
         {messages, n_messages, new_offset} =
           Enum.reduce(kafka_messages, {[], 0, offset}, fn k_msg, {messages, count, _new_offset} ->
@@ -273,7 +342,7 @@ defmodule BroadwayKafka.Producer do
   defp connect(state) do
     %{client: client, client_id: client_id, config: config} = state
 
-    case client.setup(self(), client_id, config) do
+    case client.setup(self(), client_id, __MODULE__, config) do
       {:ok, group_coordinator} ->
         %{state | group_coordinator: group_coordinator}
 

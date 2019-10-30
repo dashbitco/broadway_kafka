@@ -14,16 +14,11 @@ defmodule MyBroadway do
           topics: ["test"],
           receive_interval: 100,
           group_config: [
-            offset_commit_policy: :commit_to_kafka_v2,
             offset_commit_interval_seconds: 5,
             rejoin_delay_seconds: 2
           ],
-          consumer_config: [
-            begin_offset: :latest
-          ],
           fetch_config: [
-            # max_bytes: 2_048
-            max_bytes: 10_240
+            max_bytes: 10_240,
           ]
         ]},
         stages: 3

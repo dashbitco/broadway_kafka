@@ -6,16 +6,12 @@ defmodule BroadwayKafka.BrodClient do
   @behaviour BroadwayKafka.KafkaClient
 
   @supported_group_config_options [
-    :offset_commit_policy,
     :offset_commit_interval_seconds,
     :rejoin_delay_seconds
   ]
 
-  @supported_consumer_config_options [
-    :begin_offset
-  ]
-
   @supported_fetch_config_options [
+    :min_bytes,
     :max_bytes
   ]
 
@@ -25,32 +21,29 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, group_id} <- validate(opts, :group_id),
          {:ok, topics} <- validate(opts, :topics),
          {:ok, group_config} <- validate_group_config(opts),
-         {:ok, consumer_config} <- validate_consumer_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts) do
       {:ok,
        %{
           hosts: hosts,
           group_id: group_id,
           topics: topics,
-          consumer_config: consumer_config,
           group_config: group_config,
-          fetch_config: fetch_config
+          fetch_config: Map.new(fetch_config || [])
        }}
     end
   end
 
   @impl true
-  def setup(stage_pid, client_id, config) do
+  def setup(stage_pid, client_id, callback_module, config) do
     with :ok <- :brod.start_client(config.hosts, client_id, _client_config=[]),
-         {:ok, group_coordinator} <- start_link_group_coordinator(stage_pid, client_id, config) do
+         {:ok, group_coordinator} <- start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       {:ok, group_coordinator}
     end
   end
 
   @impl true
   def fetch(client_id, topic, partition, offset, opts, _config) do
-    # TODO: Use :brod.fetch instead
-    :brod_utils.fetch(client_id, topic, partition, offset, opts)
+    :brod.fetch(client_id, topic, partition, offset, opts)
   end
 
   @impl true
@@ -58,14 +51,13 @@ defmodule BroadwayKafka.BrodClient do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
   end
 
-  defp start_link_group_coordinator(stage_pid, client_id, config) do
+  defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
     :brod_group_coordinator.start_link(
       client_id,
       config.group_id,
       config.topics,
       config.group_config,
-      # TODO: pass as a parameter
-      BroadwayKafka.Producer,
+      callback_module,
       stage_pid
     )
   end
@@ -91,10 +83,6 @@ defmodule BroadwayKafka.BrodClient do
 
   defp validate_group_config(opts) do
     validate_supported_opts(opts, :group_config, @supported_group_config_options)
-  end
-
-  defp validate_consumer_config(opts) do
-    validate_supported_opts(opts, :consumer_config, @supported_consumer_config_options)
   end
 
   defp validate_fetch_config(opts) do
