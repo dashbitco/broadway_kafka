@@ -25,26 +25,32 @@ defmodule BroadwayKafka.Producer do
 
   ## Group config options
 
-  The avaiable options that will be passed to `:brod`'s group coordinator.
+  The available options that will be passed to `:brod`'s group coordinator.
 
     * `:offset_commit_interval_seconds` - Optional. The time interval between two
        OffsetCommitRequest messages. Default is 5.
 
-    * `:rejoin_delay_seconds` - Delay in seconds before re-joining the group. Default is 1.
+    * `:rejoin_delay_seconds` - Optional. Delay in seconds before rejoining the group. Default is 1.
+
+    * `:session_timeout_seconds` - Optional. Time in seconds the group coordinator broker waits
+      before considering a member 'down' if no heartbeat or any kind of request is received.
+      A group member may also consider the coordinator broker 'down' if no heartbeat response
+      is received in the past N seconds. Default is 10 seconds.
 
   ## Fetch config options
 
-  The avaiable options that will be internally passed to `:brod.fetch/5`.
+  The available options that will be internally passed to `:brod.fetch/5`.
 
     * `:min_bytes` - Optional. The minimum amount of data to be fetched from the server.
       If not enough data is available the request will wait for that much data to accumulate
       before answering. Default is 1 byte. Setting this value greater than 1 can improve
       server throughput a bit at the cost of additional latency.
 
-    * `:max_bytes` - Optional. The maximum amount of data to be fetched from the server.
-      Default is 1048576 (1 MiB).
+    * `:max_bytes` - Optional. The maximum amount of data to be fetched at a time from a single
+      partition. Default is 1048576 (1 MiB). Setting greater values can improve server
+      throughput at the cost of more memory consumption.
 
-  > Note: Currently, Broadway does not support all options avaiable for `:brod`. If you
+  > **Note**: Currently, Broadway does not support all options provided by `:brod`. If you
   have a scenario where you need any extra option that is not listed above, please open an
   issue, so we can consider adding it.
 
@@ -57,20 +63,32 @@ defmodule BroadwayKafka.Producer do
             hosts: [localhost: 9092],
             group_id: "group_1",
             topics: ["test"],
-            receive_interval: 1000,
-            group_config: [
-              offset_commit_interval_seconds: 5,
-              rejoin_delay_seconds: 2
-            ]
           ]},
-          stages: 5
+          stages: 10
         ],
         processors: [
-          default: []
+          default: [
+            stages: 10
+          ]
         ]
       )
-  """
 
+  ## Concurrency and partitioning
+
+  The concurrency model provided by Kafka is based on partitioning, i.e., the more partitions
+  you have, the more concurrency you get. However, in order to take advantage of this model
+  you need to set up the `stages` options for your processors and batchers accordingly. Having
+  less stages than topic/partitions assigned will result in individual processors handling more
+  than one partition, decreasing the overall level of concurrency. Therefore, if you want to
+  always be able to process messages at maximum concurrency (assuming you have enough resources
+  to do it), you should increase the numbers of stages up front to make sure you have enough
+  processors to handle the extra messages received from new partitions assigned.
+
+  > **Note**: Even if you don't plan to add more partitions to a Kafka topic, your pipeline can still
+  receive more assignments than planned. For instance, if another consumer crashes, the server
+  will reassign all its topic/partition to other available consumers, including any Broadway
+  producer subscribed to the same topic.
+  """
 
   use GenStage
 
@@ -234,7 +252,7 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl Producer
-  def prepare_for_draining(_) do
+  def prepare_for_draining(_state) do
     # TODO: Implement draining or document why one is not necessary.
     :ok
   end

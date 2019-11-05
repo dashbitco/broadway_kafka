@@ -5,9 +5,14 @@ defmodule BroadwayKafka.BrodClient do
 
   @behaviour BroadwayKafka.KafkaClient
 
+  # We only accept :commit_to_kafka_v2 for now so we hard coded the value
+  # to avoid problems in case :brod's default policy changes in the future
+  @offset_commit_policy :commit_to_kafka_v2
+
   @supported_group_config_options [
     :offset_commit_interval_seconds,
-    :rejoin_delay_seconds
+    :rejoin_delay_seconds,
+    :session_timeout_seconds
   ]
 
   @supported_fetch_config_options [
@@ -27,7 +32,7 @@ defmodule BroadwayKafka.BrodClient do
           hosts: hosts,
           group_id: group_id,
           topics: topics,
-          group_config: group_config,
+          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
           fetch_config: Map.new(fetch_config || [])
        }}
     end
