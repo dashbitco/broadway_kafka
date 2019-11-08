@@ -393,6 +393,25 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "stop trying to receive new messages after start draining" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+    producer = get_producer(pid)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+
+    assert_receive {:messages_fetched, 0}
+
+    :sys.suspend(producer)
+    flush_messages_received()
+    task = Task.async(fn -> Broadway.Producer.drain(producer) end)
+    :sys.resume(producer)
+    Task.await(task)
+
+    refute_receive {:messages_fetched, 0}, 10
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_stages = Keyword.get(opts, :producers_stages, 1)
     processors_stages = Keyword.get(opts, :processors_stages, 1)
@@ -413,7 +432,7 @@ defmodule BroadwayKafka.ProducerTest do
           client: FakeKafkaClient,
           test_pid: self(),
           message_server: message_server,
-          receive_interval: 30,
+          receive_interval: 0,
           max_bytes: 10
         ]},
         stages: producers_stages
@@ -452,6 +471,14 @@ defmodule BroadwayKafka.ProducerTest do
 
     receive do
       {:DOWN, ^ref, _, _, _} -> :ok
+    end
+  end
+
+  defp flush_messages_received() do
+    receive do
+      {:messages_fetched, 0} -> flush_messages_received()
+    after
+      0 -> :ok
     end
   end
 end

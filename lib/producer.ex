@@ -131,9 +131,9 @@ defmodule BroadwayKafka.Producer do
           broadway_name: opts[:broadway][:name],
           processors_names: Keyword.keys(opts[:broadway][:processors]),
           batchers_names: Keyword.keys(opts[:broadway][:batchers]),
-          draining: false,
-          drain_caller: nil,
-          demand: 0
+          revoke_caller: nil,
+          demand: 0,
+          draining: false
         }
         {:producer, connect(state), buffer_size: :infinity}
     end
@@ -145,21 +145,21 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_call(:drain_messages, _from, %{draining: true} = state) do
-    {:reply, :ok, [], state}
-  end
-
-  @impl GenStage
-  def handle_call(:drain_messages, from, state) do
+  def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     if Acknowledger.all_drained?(state.acks) do
       {:reply, :ok, [], %{state | acks: Acknowledger.new}}
     else
-      {:noreply, [], %{state | draining: true, drain_caller: from}}
+      {:noreply, [], %{state | revoke_caller: from}}
     end
   end
 
   @impl GenStage
-  def handle_info({:poll, key}, state) do
+  def handle_call(:drain_after_revoke, _from, state) do
+    {:reply, :ok, [], state}
+  end
+
+  @impl GenStage
+  def handle_info({:poll, key}, %{draining: false} = state) do
     if Acknowledger.has_key?(state.acks, key) do
       {_current, offset, _pending} = state.acks[key]
       {messages, n_messages, new_offset} = fetch_messages_from_kafka(state, key, offset)
@@ -175,6 +175,11 @@ defmodule BroadwayKafka.Producer do
     else
       {:noreply, [], state}
     end
+  end
+
+  @impl GenStage
+  def handle_info(:maybe_schedule_poll, %{receive_timer: nil} = state) do
+    {:noreply, [], state}
   end
 
   @impl GenStage
@@ -236,9 +241,9 @@ defmodule BroadwayKafka.Producer do
     end
 
     new_state =
-      if drained? && state.draining && Acknowledger.all_drained?(updated_acks) do
-        GenStage.reply(state.drain_caller, :ok)
-        %{state | draining: false, drain_caller: nil, acks: Acknowledger.new}
+      if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
+        GenStage.reply(state.revoke_caller, :ok)
+        %{state | revoke_caller: nil, acks: Acknowledger.new}
       else
         %{state | acks: updated_acks}
       end
@@ -252,9 +257,9 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl Producer
-  def prepare_for_draining(_state) do
-    # TODO: Implement draining or document why one is not necessary.
-    :ok
+  def prepare_for_draining(%{receive_timer: receive_timer} = state) do
+    receive_timer && Process.cancel_timer(receive_timer)
+    {:noreply, [], %{state | receive_timer: nil, draining: true}}
   end
 
   @impl Producer
@@ -295,7 +300,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def assignments_revoked(producer_pid) do
-    GenStage.call(producer_pid, :drain_messages, :infinity)
+    GenStage.call(producer_pid, :drain_after_revoke, :infinity)
     :ok
   end
 
@@ -312,11 +317,7 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], state}
   end
 
-  defp fetch_messages_from_kafka(%{draining: true}, _key, offset) do
-    {[], 0, offset}
-  end
-
-  defp fetch_messages_from_kafka(state, key, offset) do
+  defp fetch_messages_from_kafka(%{revoke_caller: nil} = state, key, offset) do
     %{
       client: client,
       client_id: client_id,
@@ -340,6 +341,10 @@ defmodule BroadwayKafka.Producer do
         IO.inspect(reason, label: "ERROR")
         {[], 0, offset}
     end
+  end
+
+  defp fetch_messages_from_kafka(_state, _key, offset) do
+    {[], 0, offset}
   end
 
   defp wrap_message(kafka_msg, topic, partition, generation_id) do

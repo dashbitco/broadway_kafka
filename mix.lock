@@ -1,9 +1,9 @@
 %{
-  "broadway": {:git, "https://github.com/plataformatec/broadway.git", "0ce50165c7a75cc2077b6f3690ed278c0ec68c89", []},
-  "brod": {:git, "https://github.com/klarna/brod.git", "cd55b352e194bf41408b6c344cec84a105a73d94", []},
-  "crc32cer": {:git, "https://github.com/zmstone/crc32cer", "ebedd10d83856cca081715ad37dc0ac2f731e437", [tag: "0.1.3"]},
+  "broadway": {:git, "https://github.com/plataformatec/broadway.git", "7e961300a233c38126978c64ebf92a97cb078c1a", []},
+  "brod": {:hex, :brod, "3.9.2", "00206e09bad7cc352b8697521edc9dff84895e3117863459b7622e04b03b4150", [:make, :rebar, :rebar3], [{:kafka_protocol, "2.3.1", [hex: :kafka_protocol, repo: "hexpm", optional: false]}, {:supervisor3, "1.1.8", [hex: :supervisor3, repo: "hexpm", optional: false]}], "hexpm"},
+  "crc32cer": {:hex, :crc32cer, "0.1.3", "8984906c4b4fae6aa292c48f286a1c83b19ad44bd102287acb94d696015967ce", [:make, :rebar, :rebar3], [], "hexpm"},
   "gen_stage": {:hex, :gen_stage, "0.14.3", "d0c66f1c87faa301c1a85a809a3ee9097a4264b2edf7644bf5c123237ef732bf", [:mix], [], "hexpm"},
-  "kafka_protocol": {:git, "https://github.com/klarna/kafka_protocol.git", "31662675672b7a664b17db25db618f9ffe843af5", [tag: "2.3.1"]},
-  "snappyer": {:git, "https://github.com/zmstone/snappyer", "cd9001a9a881c50d2f116c2adbb1e620f4f8f4b6", [tag: "1.2.4"]},
-  "supervisor3": {:git, "https://github.com/klarna/supervisor3.git", "7a3af0a2bdb1a634dbdfb5226dc614b7acd34a13", [tag: "1.1.8"]},
+  "kafka_protocol": {:hex, :kafka_protocol, "2.3.1", "5a9afdf022db64f0dc4f1b611bff44c2f71b16782524e544e3f96f9ce08bd82d", [:rebar, :rebar3], [{:crc32cer, "0.1.3", [hex: :crc32cer, repo: "hexpm", optional: false]}, {:snappyer, "1.2.4", [hex: :snappyer, repo: "hexpm", optional: false]}], "hexpm"},
+  "snappyer": {:hex, :snappyer, "1.2.4", "6d739c534cd2339633127a2b40279be71f149e5842c5363a4d88e66efb7c1fec", [:make, :rebar, :rebar3], [], "hexpm"},
+  "supervisor3": {:hex, :supervisor3, "1.1.8", "5cf95c95342b589ec8d74689eea0646c0a3eb92820241e0c2d0ca4c104df92bc", [:make, :rebar, :rebar3], [], "hexpm"},
 }

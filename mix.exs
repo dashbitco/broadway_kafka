@@ -22,8 +22,7 @@ defmodule BroadwayKafka.MixProject do
   defp deps do
     [
       {:broadway, git: "https://github.com/plataformatec/broadway.git"},
-      # {:brod, "~> 3.9.1"}
-      {:brod, git: "https://github.com/klarna/brod.git", commit: "cd55b352e194bf41408b6c344cec84a105a73d94"}
+      {:brod, "~> 3.9.2"}
     ]
   end
 end
