@@ -70,7 +70,8 @@ defmodule BroadwayKafka.Acknowledger do
         ...
       end
   """
-  @spec update_current_offset(t, key, [:brod.offset()]) :: {drained? :: boolean, :brod.offset | nil, t}
+  @spec update_current_offset(t, key, [:brod.offset()]) ::
+          {drained? :: boolean, :brod.offset() | nil, t}
   def update_current_offset(acknowledgers, key, offsets) when is_list(offsets) do
     %{^key => {current, last, pending}} = acknowledgers
     {new_current, new_pending} = update_offsets(offsets, current, pending)

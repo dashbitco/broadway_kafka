@@ -103,7 +103,9 @@ defmodule BroadwayKafka.Producer do
   @behaviour :brod_group_member
 
   defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
-  defrecord :brod_received_assignment, extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
+
+  defrecord :brod_received_assignment,
+            extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
   @default_receive_interval 2000
 
@@ -119,13 +121,14 @@ defmodule BroadwayKafka.Producer do
       {:ok, config} ->
         {_, producer_name} = Process.info(self(), :registered_name)
         client_id = Module.concat([producer_name, Client])
+
         state = %{
           client: client,
           client_id: client_id,
           group_coordinator: nil,
           receive_timer: nil,
           receive_interval: receive_interval,
-          acks: Acknowledger.new,
+          acks: Acknowledger.new(),
           config: config,
           broadway_index: opts[:broadway][:index],
           broadway_name: opts[:broadway][:name],
@@ -135,6 +138,7 @@ defmodule BroadwayKafka.Producer do
           demand: 0,
           draining: false
         }
+
         {:producer, connect(state), buffer_size: :infinity}
     end
   end
@@ -147,7 +151,7 @@ defmodule BroadwayKafka.Producer do
   @impl GenStage
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     if Acknowledger.all_drained?(state.acks) do
-      {:reply, :ok, [], %{state | acks: Acknowledger.new}}
+      {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
       {:noreply, [], %{state | revoke_caller: from}}
     end
@@ -165,11 +169,11 @@ defmodule BroadwayKafka.Producer do
       {messages, n_messages, new_offset} = fetch_messages_from_kafka(state, key, offset)
       new_demand = max(0, state.demand - n_messages)
 
-      new_state =
-        %{state |
-          acks: Acknowledger.update_last_offset(state.acks, key, new_offset),
+      new_state = %{
+        state
+        | acks: Acknowledger.update_last_offset(state.acks, key, new_offset),
           demand: new_demand
-        }
+      }
 
       {:noreply, messages, new_state}
     else
@@ -243,7 +247,7 @@ defmodule BroadwayKafka.Producer do
     new_state =
       if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
         GenStage.reply(state.revoke_caller, :ok)
-        %{state | revoke_caller: nil, acks: Acknowledger.new}
+        %{state | revoke_caller: nil, acks: Acknowledger.new()}
       else
         %{state | acks: updated_acks}
       end
@@ -270,12 +274,23 @@ defmodule BroadwayKafka.Producer do
     [first_processor_entry | other_processors_entries] = opts[:processors]
 
     {allocator, updated_processor_entry} =
-      build_allocator_spec_and_consumer_entry(broadway_name, "processor", producers_stages, first_processor_entry)
+      build_allocator_spec_and_consumer_entry(
+        broadway_name,
+        "processor",
+        producers_stages,
+        first_processor_entry
+      )
 
     {allocators, updated_batchers_entries} =
       Enum.reduce(opts[:batchers], {[allocator], []}, fn entry, {allocators, entries} ->
         {allocator, updated_entry} =
-          build_allocator_spec_and_consumer_entry(broadway_name, "batcher_consumer", producers_stages, entry)
+          build_allocator_spec_and_consumer_entry(
+            broadway_name,
+            "batcher_consumer",
+            producers_stages,
+            entry
+          )
+
         {[allocator | allocators], [updated_entry | entries]}
       end)
 
@@ -304,7 +319,8 @@ defmodule BroadwayKafka.Producer do
     :ok
   end
 
-  defp maybe_schedule_poll(%{receive_timer: nil, demand: demand} = state, interval) when demand > 0 do
+  defp maybe_schedule_poll(%{receive_timer: nil, demand: demand} = state, interval)
+       when demand > 0 do
     for key <- Acknowledger.keys(state.acks) do
       Process.send_after(self(), {:poll, key}, interval)
     end
@@ -352,12 +368,12 @@ defmodule BroadwayKafka.Producer do
 
     ack_data = %{offset: offset}
     ack_ref = {self(), {generation_id, topic, partition}}
-    message =
-      %Message{
-        data: data,
-        metadata: %{topic: topic, partition: partition, offset: offset, key: key, ts: ts},
-        acknowledger: {Acknowledger, ack_ref, ack_data}
-      }
+
+    message = %Message{
+      data: data,
+      metadata: %{topic: topic, partition: partition, offset: offset, key: key, ts: ts},
+      acknowledger: {Acknowledger, ack_ref, ack_data}
+    }
 
     Message.put_batch_key(message, {topic, partition})
   end
@@ -370,12 +386,17 @@ defmodule BroadwayKafka.Producer do
         %{state | group_coordinator: group_coordinator}
 
       error ->
-        #TODO
+        # TODO
         raise "Setup failed: #{inspect(error)}"
     end
   end
 
-  defp build_allocator_spec_and_consumer_entry(broadway_name, prefix, producers_stages, consumer_entry) do
+  defp build_allocator_spec_and_consumer_entry(
+         broadway_name,
+         prefix,
+         producers_stages,
+         consumer_entry
+       ) do
     {consumer_name, consumer_config} = consumer_entry
     consumer_stages = consumer_config[:stages]
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])

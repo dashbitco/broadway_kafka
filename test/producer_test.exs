@@ -2,7 +2,9 @@ defmodule BroadwayKafka.ProducerTest do
   use ExUnit.Case
 
   import Record, only: [defrecord: 2, extract: 2]
-  defrecord :brod_received_assignment, extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
+
+  defrecord :brod_received_assignment,
+            extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
   defmodule MessageServer do
     def start_link() do
@@ -13,6 +15,7 @@ defmodule BroadwayKafka.ProducerTest do
       topic = Keyword.fetch!(opts, :topic)
       partition = Keyword.fetch!(opts, :partition)
       key = key(topic, partition)
+
       Agent.update(server, fn queue ->
         Map.put(queue, key, (queue[key] || []) ++ messages)
       end)
@@ -20,6 +23,7 @@ defmodule BroadwayKafka.ProducerTest do
 
     def take_messages(server, topic, partition, amount) do
       key = key(topic, partition)
+
       Agent.get_and_update(server, fn queue ->
         {messages, rest} = Enum.split(queue[key] || [], amount)
         {messages, Map.put(queue, key, rest)}
@@ -48,7 +52,10 @@ defmodule BroadwayKafka.ProducerTest do
     @impl true
     def fetch(_client_id, topic, partition, offset, _opts, config) do
       n_messages = config[:max_bytes]
-      messages = MessageServer.take_messages(config[:message_server], topic, partition, n_messages)
+
+      messages =
+        MessageServer.take_messages(config[:message_server], topic, partition, n_messages)
+
       send(config[:test_pid], {:messages_fetched, length(messages)})
 
       kafka_messages =
@@ -71,6 +78,7 @@ defmodule BroadwayKafka.ProducerTest do
 
     def handle_message(_, message, %{test_pid: test_pid}) do
       meta = message.metadata
+
       content = %{
         data: message.data,
         topic: meta.topic,
@@ -78,18 +86,21 @@ defmodule BroadwayKafka.ProducerTest do
         offset: meta.offset,
         pid: self()
       }
+
       send(test_pid, {:message_handled, content})
       message
     end
 
     def handle_batch(_, messages, batch_info, %{test_pid: test_pid}) do
       %{batch_key: {topic, partition}} = batch_info
+
       content = %{
         topic: topic,
         partition: partition,
         offset: List.last(messages).metadata.offset,
         pid: self()
       }
+
       send(test_pid, {:batch_handled, content})
       messages
     end
@@ -104,8 +115,11 @@ defmodule BroadwayKafka.ProducerTest do
         receive do
           {unquote(type), unquote(content) = received_message} ->
             assert received_message.offset == offset
-        after unquote(timeout) ->
-          raise "No message matching #{unquote(Macro.to_string(pattern))} after #{unquote(timeout)}ms."
+        after
+          unquote(timeout) ->
+            raise "No message matching #{unquote(Macro.to_string(pattern))} after #{
+                    unquote(timeout)
+                  }ms."
         end
       end
     end
@@ -131,6 +145,7 @@ defmodule BroadwayKafka.ProducerTest do
     {:ok, pid} = start_broadway(message_server)
 
     producer = get_producer(pid)
+
     put_assignments(producer, [
       [topic: "topic_1", partition: 0],
       [topic: "topic_1", partition: 1],
@@ -224,16 +239,23 @@ defmodule BroadwayKafka.ProducerTest do
     assert length(processors) == 4
 
     assert_receive_in_order(
-      {:message_handled, %{topic: "topic_1", partition: 0, pid: ^processor_1}}, offsets: 101..109
+      {:message_handled, %{topic: "topic_1", partition: 0, pid: ^processor_1}},
+      offsets: 101..109
     )
+
     assert_receive_in_order(
-      {:message_handled, %{topic: "topic_1", partition: 1, pid: ^processor_2}}, offsets: 201..209
+      {:message_handled, %{topic: "topic_1", partition: 1, pid: ^processor_2}},
+      offsets: 201..209
     )
+
     assert_receive_in_order(
-      {:message_handled, %{topic: "topic_2", partition: 0, pid: ^processor_3}}, offsets: 301..309
+      {:message_handled, %{topic: "topic_2", partition: 0, pid: ^processor_3}},
+      offsets: 301..309
     )
+
     assert_receive_in_order(
-      {:message_handled, %{topic: "topic_2", partition: 1, pid: ^processor_4}}, offsets: 401..409
+      {:message_handled, %{topic: "topic_2", partition: 1, pid: ^processor_4}},
+      offsets: 401..409
     )
 
     stop_broadway(pid)
@@ -241,11 +263,13 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "batches with the same topic/partition are processed in the same batch consumer" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server,
-      producers_stages: 2,
-      processors_stages: 4,
-      batchers_stages: 4
-    )
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        producers_stages: 2,
+        processors_stages: 4,
+        batchers_stages: 4
+      )
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -261,8 +285,11 @@ defmodule BroadwayKafka.ProducerTest do
     ])
 
     MessageServer.push_messages(message_server, 1..50, topic: "topic_1", partition: 0, offset: 110)
+
     MessageServer.push_messages(message_server, 1..50, topic: "topic_1", partition: 1, offset: 210)
+
     MessageServer.push_messages(message_server, 1..50, topic: "topic_2", partition: 0, offset: 310)
+
     MessageServer.push_messages(message_server, 1..50, topic: "topic_2", partition: 1, offset: 410)
 
     assert_receive {:batch_handled, %{topic: "topic_1", partition: 0, pid: consumer_1}}
@@ -275,19 +302,22 @@ defmodule BroadwayKafka.ProducerTest do
 
     assert_receive_in_order(
       {:batch_handled, %{topic: "topic_1", partition: 0, pid: ^consumer_1}},
-        offsets: [120, 130, 140, 150]
+      offsets: [120, 130, 140, 150]
     )
+
     assert_receive_in_order(
       {:batch_handled, %{topic: "topic_1", partition: 1, pid: ^consumer_2}},
-        offsets: [220, 230, 240, 250]
+      offsets: [220, 230, 240, 250]
     )
+
     assert_receive_in_order(
       {:batch_handled, %{topic: "topic_2", partition: 0, pid: ^consumer_3}},
-        offsets: [320, 330, 340, 350]
+      offsets: [320, 330, 340, 350]
     )
+
     assert_receive_in_order(
       {:batch_handled, %{topic: "topic_2", partition: 1, pid: ^consumer_4}},
-        offsets: [420, 430, 440, 450]
+      offsets: [420, 430, 440, 450]
     )
 
     stop_broadway(pid)
@@ -295,10 +325,12 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "messages from the same topic/partition are acknowledged in order" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server,
-      producers_stages: 2,
-      processors_stages: 4
-    )
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        producers_stages: 2,
+        processors_stages: 4
+      )
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -319,16 +351,23 @@ defmodule BroadwayKafka.ProducerTest do
     MessageServer.push_messages(message_server, 1..20, topic: "topic_2", partition: 1)
 
     assert_receive_in_order(
-      {:ack, %{topic: "topic_1", partition: 0}}, offsets: [105, 110, 115, 120]
+      {:ack, %{topic: "topic_1", partition: 0}},
+      offsets: [105, 110, 115, 120]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_1", partition: 1}}, offsets: [205, 210, 215, 220]
+      {:ack, %{topic: "topic_1", partition: 1}},
+      offsets: [205, 210, 215, 220]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_2", partition: 0}}, offsets: [305, 310, 315, 320]
+      {:ack, %{topic: "topic_2", partition: 0}},
+      offsets: [305, 310, 315, 320]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_2", partition: 1}}, offsets: [405, 410, 415, 420]
+      {:ack, %{topic: "topic_2", partition: 1}},
+      offsets: [405, 410, 415, 420]
     )
 
     stop_broadway(pid)
@@ -336,11 +375,13 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "batches from the same topic/partition are acknowledged in order" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server,
-      producers_stages: 2,
-      processors_stages: 4,
-      batchers_stages: 4
-    )
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        producers_stages: 2,
+        processors_stages: 4,
+        batchers_stages: 4
+      )
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -361,16 +402,23 @@ defmodule BroadwayKafka.ProducerTest do
     MessageServer.push_messages(message_server, 1..40, topic: "topic_2", partition: 1)
 
     assert_receive_in_order(
-      {:ack, %{topic: "topic_1", partition: 0}}, offsets: [110, 120, 130, 140]
+      {:ack, %{topic: "topic_1", partition: 0}},
+      offsets: [110, 120, 130, 140]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_1", partition: 1}}, offsets: [210, 220, 230, 240]
+      {:ack, %{topic: "topic_1", partition: 1}},
+      offsets: [210, 220, 230, 240]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_2", partition: 0}}, offsets: [310, 320, 330, 340]
+      {:ack, %{topic: "topic_2", partition: 0}},
+      offsets: [310, 320, 330, 340]
     )
+
     assert_receive_in_order(
-      {:ack, %{topic: "topic_2", partition: 1}}, offsets: [410, 420, 430, 440]
+      {:ack, %{topic: "topic_2", partition: 1}},
+      offsets: [410, 420, 430, 440]
     )
 
     stop_broadway(pid)
@@ -428,13 +476,15 @@ defmodule BroadwayKafka.ProducerTest do
       name: new_unique_name(),
       context: %{test_pid: self()},
       producer: [
-        module: {BroadwayKafka.Producer,[
-          client: FakeKafkaClient,
-          test_pid: self(),
-          message_server: message_server,
-          receive_interval: 0,
-          max_bytes: 10
-        ]},
+        module:
+          {BroadwayKafka.Producer,
+           [
+             client: FakeKafkaClient,
+             test_pid: self(),
+             message_server: message_server,
+             receive_interval: 0,
+             max_bytes: 10
+           ]},
         stages: producers_stages
       ],
       processors: [
@@ -451,9 +501,20 @@ defmodule BroadwayKafka.ProducerTest do
     kafka_assignments =
       for assignment <- assignments do
         begin_offset = Keyword.get(assignment, :begin_offset, 1)
-        brod_received_assignment(topic: assignment[:topic], partition: assignment[:partition], begin_offset: begin_offset)
+
+        brod_received_assignment(
+          topic: assignment[:topic],
+          partition: assignment[:partition],
+          begin_offset: begin_offset
+        )
       end
-    BroadwayKafka.Producer.assignments_received(producer, group_member_id, group_generation_id, kafka_assignments)
+
+    BroadwayKafka.Producer.assignments_received(
+      producer,
+      group_member_id,
+      group_generation_id,
+      kafka_assignments
+    )
   end
 
   defp new_unique_name() do

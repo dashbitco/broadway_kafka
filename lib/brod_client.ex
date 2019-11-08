@@ -29,19 +29,20 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, fetch_config} <- validate_fetch_config(opts) do
       {:ok,
        %{
-          hosts: hosts,
-          group_id: group_id,
-          topics: topics,
-          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-          fetch_config: Map.new(fetch_config || [])
+         hosts: hosts,
+         group_id: group_id,
+         topics: topics,
+         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
+         fetch_config: Map.new(fetch_config || [])
        }}
     end
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, _client_config=[]),
-         {:ok, group_coordinator} <- start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
+    with :ok <- :brod.start_client(config.hosts, client_id, _client_config = []),
+         {:ok, group_coordinator} <-
+           start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       {:ok, group_coordinator}
     end
   end

@@ -8,7 +8,7 @@ defmodule BroadwayKafka.AcknowledgerTest do
   @ack Ack.add(Ack.new(), [{1, "foo", 1, 10}, {1, "bar", 2, 0}])
 
   test "new" do
-    assert Ack.new == %{}
+    assert Ack.new() == %{}
   end
 
   test "add" do
