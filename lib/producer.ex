@@ -130,10 +130,7 @@ defmodule BroadwayKafka.Producer do
           receive_interval: receive_interval,
           acks: Acknowledger.new(),
           config: config,
-          broadway_index: opts[:broadway][:index],
-          broadway_name: opts[:broadway][:name],
-          processors_names: Keyword.keys(opts[:broadway][:processors]),
-          batchers_names: Keyword.keys(opts[:broadway][:batchers]),
+          broadway_config: opts[:broadway],
           revoke_caller: nil,
           demand: 0,
           draining: false
@@ -208,19 +205,16 @@ defmodule BroadwayKafka.Producer do
 
     topics_partitions = Enum.map(list, fn {_, topic, partition, _} -> {topic, partition} end)
 
-    # TODO: Update this to broadway master. Note on master
-    # it will receive the same options as prepare_for_start
-    # but under the broadway key, so it may be possible that
-    # you can share some of this functionality (such as naming)
-    # with prepare_for_start.
-    broadway_name = state.broadway_name
+    broadway_name = state.broadway_config[:name]
+    broadway_index = state.broadway_config[:index]
+    processors_names = Keyword.keys(state.broadway_config[:processors])
+    batchers_names = Keyword.keys(state.broadway_config[:batchers])
 
-    [processor_name | _] = state.processors_names
-    broadway_index = state.broadway_index
+    [processor_name | _] = processors_names
     allocator_name = Module.concat([broadway_name, "Allocator_processor_#{processor_name}"])
     Allocator.allocate(allocator_name, broadway_index, topics_partitions)
 
-    for name <- state.batchers_names do
+    for name <- batchers_names do
       allocator_name = Module.concat([broadway_name, "Allocator_batcher_consumer_#{name}"])
       Allocator.allocate(allocator_name, broadway_index, topics_partitions)
     end
