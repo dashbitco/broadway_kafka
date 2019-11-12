@@ -77,7 +77,7 @@ defmodule BroadwayKafka.Producer do
 
   The concurrency model provided by Kafka is based on partitioning, i.e., the more partitions
   you have, the more concurrency you get. However, in order to take advantage of this model
-  you need to set up the `stages` options for your processors and batchers accordingly. Having
+  you need to set up the `:stages` options for your processors and batchers accordingly. Having
   less stages than topic/partitions assigned will result in individual processors handling more
   than one partition, decreasing the overall level of concurrency. Therefore, if you want to
   always be able to process messages at maximum concurrency (assuming you have enough resources
@@ -270,6 +270,7 @@ defmodule BroadwayKafka.Producer do
     {allocator, updated_processor_entry} =
       build_allocator_spec_and_consumer_entry(
         broadway_name,
+        :processors,
         "processor",
         producers_stages,
         first_processor_entry
@@ -280,6 +281,7 @@ defmodule BroadwayKafka.Producer do
         {allocator, updated_entry} =
           build_allocator_spec_and_consumer_entry(
             broadway_name,
+            :batchers,
             "batcher_consumer",
             producers_stages,
             entry
@@ -387,19 +389,29 @@ defmodule BroadwayKafka.Producer do
 
   defp build_allocator_spec_and_consumer_entry(
          broadway_name,
+         group,
          prefix,
          producers_stages,
          consumer_entry
        ) do
     {consumer_name, consumer_config} = consumer_entry
+    validate_partition_by(group, consumer_name, consumer_config)
+
     consumer_stages = consumer_config[:stages]
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])
     partition_by = &Allocator.fetch!(allocator_name, {&1.metadata.topic, &1.metadata.partition})
-    # TODO: we should raise if the user set the partition_by themselves
     new_config = Keyword.put(consumer_config, :partition_by, partition_by)
     allocator = {BroadwayKafka.Allocator, {allocator_name, producers_stages, consumer_stages}}
     allocator_spec = Supervisor.child_spec(allocator, id: allocator_name)
 
     {allocator_spec, {consumer_name, new_config}}
+  end
+
+  defp validate_partition_by(group, consumer_name, consumer_config) do
+    if Keyword.has_key?(consumer_config, :partition_by) do
+      raise ArgumentError,
+            "Cannot set option :partition_by for #{group} #{inspect(consumer_name)}. " <>
+              "The option will be set automatically by the BroadwayKafka.Producer"
+    end
   end
 end
