@@ -137,8 +137,8 @@ defmodule BroadwayKafka.ProducerTest do
     assert_receive {:EXIT, _, {%ArgumentError{message: message}, _}}
 
     assert message ==
-             "Cannot set option :partition_by for processors :default. " <>
-               "The option will be set automatically by the BroadwayKafka.Producer"
+             "cannot set option :partition_by for processors :default. " <>
+               "The option will be set automatically by BroadwayKafka.Producer"
   end
 
   test "do not allow users to set :partition_by for batchers" do
@@ -154,8 +154,8 @@ defmodule BroadwayKafka.ProducerTest do
     assert_receive {:EXIT, _, {%ArgumentError{message: message}, _}}
 
     assert message ==
-             "Cannot set option :partition_by for batchers :default. " <>
-               "The option will be set automatically by the BroadwayKafka.Producer"
+             "cannot set option :partition_by for batchers :default. " <>
+               "The option will be set automatically by BroadwayKafka.Producer"
   end
 
   test "single producer receiving messages from a single topic/partition" do

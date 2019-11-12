@@ -410,8 +410,8 @@ defmodule BroadwayKafka.Producer do
   defp validate_partition_by(group, consumer_name, consumer_config) do
     if Keyword.has_key?(consumer_config, :partition_by) do
       raise ArgumentError,
-            "Cannot set option :partition_by for #{group} #{inspect(consumer_name)}. " <>
-              "The option will be set automatically by the BroadwayKafka.Producer"
+            "cannot set option :partition_by for #{group} #{inspect(consumer_name)}. " <>
+              "The option will be set automatically by BroadwayKafka.Producer"
     end
   end
 end
