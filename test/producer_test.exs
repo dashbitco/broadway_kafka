@@ -42,7 +42,7 @@ defmodule BroadwayKafka.ProducerTest do
     defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
-    def init(opts), do: {:ok, opts}
+    def init(opts), do: {:ok, Map.new(opts)}
 
     @impl true
     def setup(_stage_pid, _client_id, _callback_module, config) do

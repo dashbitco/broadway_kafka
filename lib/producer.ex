@@ -107,12 +107,9 @@ defmodule BroadwayKafka.Producer do
   defrecord :brod_received_assignment,
             extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
-  @default_receive_interval 2000
-
   @impl GenStage
   def init(opts) do
     client = opts[:client] || BroadwayKafka.BrodClient
-    receive_interval = opts[:receive_interval] || @default_receive_interval
 
     case client.init(opts) do
       {:error, message} ->
@@ -127,7 +124,7 @@ defmodule BroadwayKafka.Producer do
           client_id: client_id,
           group_coordinator: nil,
           receive_timer: nil,
-          receive_interval: receive_interval,
+          receive_interval: config.receive_interval,
           acks: Acknowledger.new(),
           config: config,
           allocator_names: allocator_names(opts[:broadway]),
@@ -338,7 +335,15 @@ defmodule BroadwayKafka.Producer do
 
       {acks, demand, events, buffer} ->
         receive_timer = receive_timer || schedule_poll(state, interval)
-        state = %{state | demand: demand, buffer: buffer, receive_timer: receive_timer, acks: acks}
+
+        state = %{
+          state
+          | demand: demand,
+            buffer: buffer,
+            receive_timer: receive_timer,
+            acks: acks
+        }
+
         {:noreply, events, state}
     end
   end
