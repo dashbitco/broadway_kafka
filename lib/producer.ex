@@ -130,7 +130,7 @@ defmodule BroadwayKafka.Producer do
           receive_interval: receive_interval,
           acks: Acknowledger.new(),
           config: config,
-          broadway_config: opts[:broadway],
+          allocator_names: allocator_names(opts[:broadway]),
           revoke_caller: nil,
           demand: 0,
           draining: false
@@ -138,6 +138,23 @@ defmodule BroadwayKafka.Producer do
 
         {:producer, connect(state), buffer_size: :infinity}
     end
+  end
+
+  defp allocator_names(broadway_config) do
+    broadway_name = broadway_config[:name]
+    broadway_index = broadway_config[:index]
+
+    processors_allocators =
+      for {name, _} <- broadway_config[:processors] do
+        Module.concat([broadway_name, "Allocator_processor_#{name}"])
+      end
+
+    batchers_allocators =
+      for {name, _} <- broadway_config[:batchers] do
+        Module.concat([broadway_name, "Allocator_batcher_consumer_#{name}"])
+      end
+
+    {broadway_index, processors_allocators, batchers_allocators}
   end
 
   @impl GenStage
@@ -204,18 +221,13 @@ defmodule BroadwayKafka.Producer do
       end)
 
     topics_partitions = Enum.map(list, fn {_, topic, partition, _} -> {topic, partition} end)
+    {broadway_index, processors_allocators, batchers_allocators} = state.allocator_names
 
-    broadway_name = state.broadway_config[:name]
-    broadway_index = state.broadway_config[:index]
-    processors_names = Keyword.keys(state.broadway_config[:processors])
-    batchers_names = Keyword.keys(state.broadway_config[:batchers])
+    for allocator_name <- processors_allocators do
+      Allocator.allocate(allocator_name, broadway_index, topics_partitions)
+    end
 
-    [processor_name | _] = processors_names
-    allocator_name = Module.concat([broadway_name, "Allocator_processor_#{processor_name}"])
-    Allocator.allocate(allocator_name, broadway_index, topics_partitions)
-
-    for name <- batchers_names do
-      allocator_name = Module.concat([broadway_name, "Allocator_batcher_consumer_#{name}"])
+    for allocator_name <- batchers_allocators do
       Allocator.allocate(allocator_name, broadway_index, topics_partitions)
     end
 
