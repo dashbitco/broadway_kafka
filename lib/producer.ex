@@ -133,7 +133,7 @@ defmodule BroadwayKafka.Producer do
           allocator_names: allocator_names(opts[:broadway]),
           revoke_caller: nil,
           demand: 0,
-          draining: false
+          shutting_down?: false
         }
 
         {:producer, connect(state), buffer_size: :infinity}
@@ -163,6 +163,9 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
+  # TODO: Is it really possible drain_after_revoked can be called
+  # multiple times? This implementation can likely be a single clause
+  # with only `{:noreply, [], %{state | revoke_caller: from}}`.
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     if Acknowledger.all_drained?(state.acks) do
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
@@ -177,8 +180,17 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_info({:poll, key}, %{draining: false} = state) do
-    if Acknowledger.has_key?(state.acks, key) do
+  def handle_info({:poll, key}, state) do
+    # We only poll if:
+    #
+    #   1. We are not shutting down
+    #   2. Our assignments have not been revoked
+    #   3. We know the key being acked
+    #
+    # Note the key may be out of date when polling has been scheduled and
+    # assignments were revoked afterwards, which is why check 3 is necessary.
+    if not state.shutting_down? and state.revoke_caller == nil and
+         Acknowledger.has_key?(state.acks, key) do
       {_current, offset, _pending} = state.acks[key]
       {messages, n_messages, new_offset} = fetch_messages_from_kafka(state, key, offset)
       new_demand = max(0, state.demand - n_messages)
@@ -193,11 +205,6 @@ defmodule BroadwayKafka.Producer do
     else
       {:noreply, [], state}
     end
-  end
-
-  @impl GenStage
-  def handle_info(:maybe_schedule_poll, %{receive_timer: nil} = state) do
-    {:noreply, [], state}
   end
 
   @impl GenStage
@@ -267,9 +274,9 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl Producer
-  def prepare_for_draining(%{receive_timer: receive_timer} = state) do
-    receive_timer && Process.cancel_timer(receive_timer)
-    {:noreply, [], %{state | receive_timer: nil, draining: true}}
+  def prepare_for_draining(state) do
+    # On draining, we will continue scheduling the polls, but they will be a no-op.
+    {:noreply, [], %{state | shutting_down?: true}}
   end
 
   @impl Producer
@@ -341,7 +348,7 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], state}
   end
 
-  defp fetch_messages_from_kafka(%{revoke_caller: nil} = state, key, offset) do
+  defp fetch_messages_from_kafka(state, key, offset) do
     %{
       client: client,
       client_id: client_id,
@@ -365,10 +372,6 @@ defmodule BroadwayKafka.Producer do
         IO.inspect(reason, label: "ERROR")
         {[], 0, offset}
     end
-  end
-
-  defp fetch_messages_from_kafka(_state, _key, offset) do
-    {[], 0, offset}
   end
 
   defp wrap_message(kafka_msg, topic, partition, generation_id) do
