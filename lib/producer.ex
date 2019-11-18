@@ -163,20 +163,12 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  # TODO: Is it really possible drain_after_revoked can be called
-  # multiple times? This implementation can likely be a single clause
-  # with only `{:noreply, [], %{state | revoke_caller: from}}`.
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     if Acknowledger.all_drained?(state.acks) do
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
       {:noreply, [], %{state | revoke_caller: from}}
     end
-  end
-
-  @impl GenStage
-  def handle_call(:drain_after_revoke, _from, state) do
-    {:reply, :ok, [], state}
   end
 
   @impl GenStage
