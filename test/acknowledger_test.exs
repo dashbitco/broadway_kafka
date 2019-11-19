@@ -22,9 +22,9 @@ defmodule BroadwayKafka.AcknowledgerTest do
     assert Ack.keys(@ack) |> Enum.sort() == [@bar, @foo]
   end
 
-  test "has_key?" do
-    assert Ack.has_key?(@ack, @foo)
-    assert Ack.has_key?(@ack, @bar)
+  test "last_offset" do
+    assert Ack.last_offset(@ack, @foo) == 10
+    assert Ack.last_offset(@ack, @bar) == 0
   end
 
   test "update_current_offset" do

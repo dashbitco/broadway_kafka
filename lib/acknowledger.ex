@@ -30,20 +30,27 @@ defmodule BroadwayKafka.Acknowledger do
         Process.send_after(self(), {:poll, key}, @timeout)
       end
 
-  Then on :poll, one should call `has_key?/2`, see if the key is
+  Then on :poll, one should call `last_offset/2`, see if the key is
   still valid. If so, we should poll Kafka and generate messages.
   The `ack_ref` of each message should be `{producer_pid, ack_key}`.
-  Once poll is done, `update_last_offset/3` must be called with the
-  new offset.
+  Once poll is done, `update_last_offset/3` must be called every
+  time messages are sent to the client.
   """
   @spec keys(t) :: [key]
   def keys(acknowledgers), do: Map.keys(acknowledgers)
 
   @doc """
-  Sees if the given key still exists.
+  Returns the last offset for key.
+
+  Returns nil if the key does not exist.
   """
-  @spec has_key?(t, key) :: boolean()
-  def has_key?(acknowledgers, key), do: Map.has_key?(acknowledgers, key)
+  @spec last_offset(t, key) :: :brod.offset() | nil
+  def last_offset(acknowledgers, key) do
+    case acknowledgers do
+      %{^key => {_, offset, _}} -> offset
+      %{} -> nil
+    end
+  end
 
   @doc """
   Updates the last offset after every polling.
