@@ -117,9 +117,8 @@ defmodule BroadwayKafka.ProducerTest do
             assert received_message.offset == offset
         after
           unquote(timeout) ->
-            raise "No message matching #{unquote(Macro.to_string(pattern))} after #{
-                    unquote(timeout)
-                  }ms."
+            raise "no message matching #{unquote(Macro.to_string(pattern))}" <>
+                    "after #{unquote(timeout)}ms"
         end
       end
     end
