@@ -133,10 +133,11 @@ defmodule BroadwayKafka.Producer do
           allocator_names: allocator_names(opts[:broadway]),
           revoke_caller: nil,
           demand: 0,
-          shutting_down?: false
+          shutting_down?: false,
+          buffer: :queue.new()
         }
 
-        {:producer, connect(state), buffer_size: :infinity}
+        {:producer, connect(state)}
     end
   end
 
@@ -164,6 +165,8 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
+    state = reset_buffer(state)
+
     if Acknowledger.all_drained?(state.acks) do
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
@@ -184,13 +187,15 @@ defmodule BroadwayKafka.Producer do
     if not state.shutting_down? and state.revoke_caller == nil and
          Acknowledger.has_key?(state.acks, key) do
       {_current, offset, _pending} = state.acks[key]
-      {messages, n_messages, new_offset} = fetch_messages_from_kafka(state, key, offset)
-      new_demand = max(0, state.demand - n_messages)
+      {messages, new_offset} = fetch_messages_from_kafka(state, key, offset)
+      {new_demand, messages, pending} = split_demand(messages, state.demand)
+      new_buffer = enqueue_many(state.buffer, pending)
 
       new_state = %{
         state
         | acks: Acknowledger.update_last_offset(state.acks, key, new_offset),
-          demand: new_demand
+          demand: new_demand,
+          buffer: new_buffer
       }
 
       {:noreply, messages, new_state}
@@ -326,18 +331,26 @@ defmodule BroadwayKafka.Producer do
     :ok
   end
 
-  defp maybe_schedule_poll(%{receive_timer: nil, demand: demand} = state, interval)
-       when demand > 0 do
+  defp maybe_schedule_poll(state, interval) do
+    %{buffer: buffer, demand: demand, receive_timer: receive_timer} = state
+
+    case dequeue_many(buffer, demand, []) do
+      {0, events, buffer} ->
+        {:noreply, events, %{state | demand: 0, buffer: buffer}}
+
+      {demand, events, buffer} ->
+        receive_timer = receive_timer || schedule_poll(state, interval)
+        state = %{state | demand: demand, buffer: buffer, receive_timer: receive_timer}
+        {:noreply, events, state}
+    end
+  end
+
+  defp schedule_poll(state, interval) do
     for key <- Acknowledger.keys(state.acks) do
       Process.send_after(self(), {:poll, key}, interval)
     end
 
-    ref = Process.send_after(self(), :maybe_schedule_poll, interval)
-    {:noreply, [], %{state | receive_timer: ref}}
-  end
-
-  defp maybe_schedule_poll(state, _interval) do
-    {:noreply, [], state}
+    Process.send_after(self(), :maybe_schedule_poll, interval)
   end
 
   defp fetch_messages_from_kafka(state, key, offset) do
@@ -351,13 +364,10 @@ defmodule BroadwayKafka.Producer do
 
     case client.fetch(client_id, topic, partition, offset, config[:fetch_config], config) do
       {:ok, {_watermark_offset, kafka_messages}} ->
-        {messages, n_messages, new_offset} =
-          Enum.reduce(kafka_messages, {[], 0, offset}, fn k_msg, {messages, count, _new_offset} ->
-            msg = wrap_message(k_msg, topic, partition, generation_id)
-            {[msg | messages], count + 1, msg.metadata.offset + 1}
-          end)
-
-        {Enum.reverse(messages), n_messages, new_offset}
+        Enum.map_reduce(kafka_messages, offset, fn k_msg, _new_offset ->
+          msg = wrap_message(k_msg, topic, partition, generation_id)
+          {msg, msg.metadata.offset + 1}
+        end)
 
       {:error, reason} ->
         # TODO: Treat the error properly
@@ -420,5 +430,50 @@ defmodule BroadwayKafka.Producer do
             "cannot set option :partition_by for #{group} #{inspect(consumer_name)}. " <>
               "The option will be set automatically by BroadwayKafka.Producer"
     end
+  end
+
+  ## Buffer handling
+
+  defp split_demand(list, demand) do
+    {demand, front, back} = reverse_split_demand(list, demand, [])
+    {demand, Enum.reverse(front), back}
+  end
+
+  defp reverse_split_demand(rest, 0, acc) do
+    {0, acc, rest}
+  end
+
+  defp reverse_split_demand([], demand, acc) do
+    {demand, acc, []}
+  end
+
+  defp reverse_split_demand([head | tail], demand, acc) do
+    reverse_split_demand(tail, demand - 1, [head | acc])
+  end
+
+  defp enqueue_many(queue, []), do: queue
+  defp enqueue_many(queue, list), do: :queue.in(list, queue)
+
+  defp dequeue_many(queue, demand, acc) do
+    case :queue.out(queue) do
+      {{:value, list}, queue} ->
+        case reverse_split_demand(list, demand, acc) do
+          {0, acc, []} ->
+            {0, Enum.reverse(acc), queue}
+
+          {0, acc, rest} ->
+            {0, Enum.reverse(acc), :queue.in_r(rest, queue)}
+
+          {demand, acc, []} ->
+            dequeue_many(queue, demand, acc)
+        end
+
+      {:empty, queue} ->
+        {demand, Enum.reverse(acc), queue}
+    end
+  end
+
+  defp reset_buffer(state) do
+    put_in(state.buffer, :queue.new())
   end
 end
