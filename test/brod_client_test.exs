@@ -2,7 +2,6 @@ defmodule BroadwayKafka.BrodClientTest do
   use ExUnit.Case
 
   alias BroadwayKafka.BrodClient
-  # import ExUnit.CaptureLog
 
   @opts [
     group_id: "group",
