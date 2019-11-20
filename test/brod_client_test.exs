@@ -12,7 +12,7 @@ defmodule BroadwayKafka.BrodClientTest do
   ]
 
   describe "validate init options" do
-    test ":hosts is required and should be a keyword list" do
+    test ":hosts is a required keyword list" do
       opts = Keyword.delete(@opts, :hosts)
       assert BrodClient.init(opts) == {:error, ":hosts is required"}
 
@@ -25,7 +25,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{hosts: [host: 9092]}} = BrodClient.init(opts)
     end
 
-    test ":group_id is required and should be a string" do
+    test ":group_id is a required string" do
       opts = Keyword.delete(@opts, :group_id)
       assert BrodClient.init(opts) == {:error, ":group_id is required"}
 
@@ -38,7 +38,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{group_id: "my_group"}} = BrodClient.init(opts)
     end
 
-    test ":topics is required and should be a list of strings or a keyword list" do
+    test ":topics is a required list of strings or keyword list" do
       opts = Keyword.delete(@opts, :topics)
       assert BrodClient.init(opts) == {:error, ":topics is required"}
 
@@ -56,7 +56,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{topics: [topic_1: 1, topic_2: 2]}} = BrodClient.init(opts)
     end
 
-    test ":receive_interval should be a non-negative integer with default value 2000" do
+    test ":receive_interval is a non-negative integer with default value 2000" do
       opts = Keyword.delete(@opts, :receive_interval)
       assert {:ok, %{receive_interval: 2000}} = BrodClient.init(opts)
 
@@ -69,7 +69,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{receive_interval: 1000}} = BrodClient.init(opts)
     end
 
-    test ":offset_commit_interval_seconds is optional non-negative integer" do
+    test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
       assert BrodClient.init(opts) ==
@@ -82,7 +82,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert group_config[:offset_commit_interval_seconds] == 3
     end
 
-    test ":rejoin_delay_seconds is optional non-negative integer" do
+    test ":rejoin_delay_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :rejoin_delay_seconds], :an_atom)
 
       assert BrodClient.init(opts) ==
@@ -94,7 +94,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert group_config[:rejoin_delay_seconds] == 3
     end
 
-    test ":session_timeout_seconds is optional non-negative integer" do
+    test ":session_timeout_seconds is an optional positive integer" do
       opts = put_in(@opts, [:group_config, :session_timeout_seconds], :an_atom)
 
       assert BrodClient.init(opts) ==
@@ -106,7 +106,7 @@ defmodule BroadwayKafka.BrodClientTest do
       assert group_config[:session_timeout_seconds] == 3
     end
 
-    test ":min_bytes is optional non-negative integer" do
+    test ":min_bytes is an optional positive integer" do
       opts = put_in(@opts, [:fetch_config, :min_bytes], :an_atom)
 
       assert BrodClient.init(opts) ==
