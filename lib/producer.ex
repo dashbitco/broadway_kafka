@@ -1,6 +1,11 @@
 defmodule BroadwayKafka.Producer do
   @moduledoc """
-  A Kafka producer for Broadway that consumes messages from a Kafka consumer group.
+  A Kafka connector for Broadway.
+
+  BroadwayKafka can subscribe as a consumer to one or more topics and process streams
+  of records within the same consumer group. Communication is done through Kafka's
+  [Consumer API](https://kafka.apache.org/documentation.html#consumerapi) using the
+  [:brod](https://github.com/klarna/brod/) client.
 
   ## Options
 
