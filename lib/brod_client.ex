@@ -20,11 +20,15 @@ defmodule BroadwayKafka.BrodClient do
     :max_bytes
   ]
 
+  @default_receive_interval 2000
+
   @impl true
   def init(opts) do
-    with {:ok, hosts} <- validate(opts, :hosts),
-         {:ok, group_id} <- validate(opts, :group_id),
-         {:ok, topics} <- validate(opts, :topics),
+    with {:ok, hosts} <- validate(opts, :hosts, required: true),
+         {:ok, group_id} <- validate(opts, :group_id, required: true),
+         {:ok, topics} <- validate(opts, :topics, required: true),
+         {:ok, receive_interval} <-
+           validate(opts, :receive_interval, default: @default_receive_interval),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts) do
       {:ok,
@@ -32,6 +36,7 @@ defmodule BroadwayKafka.BrodClient do
          hosts: hosts,
          group_id: group_id,
          topics: topics,
+         receive_interval: receive_interval,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || [])
        }}
@@ -68,18 +73,63 @@ defmodule BroadwayKafka.BrodClient do
     )
   end
 
-  defp validate(opts, key, default \\ nil) when is_list(opts) do
-    validate_option(key, opts[key] || default)
+  defp validate(opts, key, options \\ []) when is_list(opts) do
+    has_key = Keyword.has_key?(opts, key)
+    required = Keyword.get(options, :required, false)
+    default = Keyword.get(options, :default)
+
+    cond do
+      has_key ->
+        validate_option(key, opts[key])
+
+      required ->
+        {:error, "#{inspect(key)} is required"}
+
+      default != nil ->
+        validate_option(key, default)
+
+      true ->
+        {:ok, nil}
+    end
+  end
+
+  defp validate_option(:hosts, value) do
+    if Keyword.keyword?(value) do
+      {:ok, value}
+    else
+      validation_error(:hosts, "a keyword list of host/port pairs", value)
+    end
   end
 
   defp validate_option(:group_id, value) when not is_binary(value) or value == "",
     do: validation_error(:group_id, "a non empty string", value)
 
-  defp validate_option(:topics, value) when is_list(value) do
-    if Enum.all?(value, &is_binary/1),
-      do: {:ok, value},
-      else: validation_error(:metadata, "a list of strings", value)
+  defp validate_option(:topics, value) do
+    if is_list(value) && (Enum.all?(value, &is_binary/1) || Keyword.keyword?(value)) do
+      {:ok, value}
+    else
+      validation_error(:topics, "a list of strings or a keyword list of host/port pairs", value)
+    end
   end
+
+  defp validate_option(:receive_interval, value) when not is_integer(value) or value < 0,
+    do: validation_error(:receive_interval, "a non-negative integer", value)
+
+  defp validate_option(:offset_commit_interval_seconds, value)
+       when not is_integer(value) or value < 1,
+       do: validation_error(:offset_commit_interval_seconds, "a positive integer", value)
+
+  defp validate_option(:rejoin_delay_seconds, value) when not is_integer(value) or value < 0,
+    do: validation_error(:rejoin_delay_seconds, "a non-negative integer", value)
+
+  defp validate_option(:session_timeout_seconds, value) when not is_integer(value) or value < 1,
+    do: validation_error(:session_timeout_seconds, "a positive integer", value)
+
+  defp validate_option(:min_bytes, value) when not is_integer(value) or value < 1,
+    do: validation_error(:min_bytes, "a positive integer", value)
+
+  defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
+    do: validation_error(:max_bytes, "a positive integer", value)
 
   defp validate_option(_, value), do: {:ok, value}
 
@@ -88,11 +138,22 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   defp validate_group_config(opts) do
-    validate_supported_opts(opts, :group_config, @supported_group_config_options)
+    with {:ok, [_ | _] = config} <-
+           validate_supported_opts(opts, :group_config, @supported_group_config_options),
+         {:ok, _} <- validate(config, :offset_commit_interval_seconds),
+         {:ok, _} <- validate(config, :rejoin_delay_seconds),
+         {:ok, _} <- validate(config, :session_timeout_seconds) do
+      {:ok, config}
+    end
   end
 
   defp validate_fetch_config(opts) do
-    validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options)
+    with {:ok, [_ | _] = config} <-
+           validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options),
+         {:ok, _} <- validate(config, :min_bytes),
+         {:ok, _} <- validate(config, :max_bytes) do
+      {:ok, config}
+    end
   end
 
   defp validate_supported_opts(all_opts, group_name, supported_opts) do
