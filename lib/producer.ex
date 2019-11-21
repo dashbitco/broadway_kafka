@@ -215,7 +215,6 @@ defmodule BroadwayKafka.Producer do
           begin_offset: begin_offset
         ) = assignment
 
-        # TODO: Is it guaranteed that we can always send `0` for new topics?
         offset = if begin_offset == :undefined, do: 0, else: begin_offset
         {group_generation_id, topic, partition, offset}
       end)
@@ -377,8 +376,7 @@ defmodule BroadwayKafka.Producer do
         end)
 
       {:error, reason} ->
-        # TODO: Treat the error properly
-        IO.inspect(reason, label: "ERROR")
+        Logger.error("Cannot fetch records from Kafka. Reason: #{inspect(reason)}")
         {[], 0, offset}
     end
   end
@@ -406,8 +404,7 @@ defmodule BroadwayKafka.Producer do
         %{state | group_coordinator: group_coordinator}
 
       error ->
-        # TODO
-        raise "Setup failed: #{inspect(error)}"
+        raise "Cannot connect to Kafka. Reason #{inspect(error)}"
     end
   end
 
