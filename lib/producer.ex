@@ -107,6 +107,8 @@ defmodule BroadwayKafka.Producer do
   @behaviour Producer
   @behaviour :brod_group_member
 
+  @reconnect_timeout 1000
+
   defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
   defrecord :brod_received_assignment,
@@ -258,6 +260,34 @@ defmodule BroadwayKafka.Producer do
       end
 
     {:noreply, [], new_state}
+  end
+
+  @impl GenStage
+  def handle_info({:DOWN, _ref, _, {client, _}, _reason}, %{client_id: client} = state) do
+    %{group_coordinator: group_coordinator} = state
+    schedule_reconnect()
+
+    state = reset_buffer(state)
+
+    if Process.alive?(group_coordinator) do
+      Process.exit(group_coordinator, :kill)
+    end
+
+    {:noreply, [], %{state | group_coordinator: nil}}
+  end
+
+  @impl GenStage
+  def handle_info(:reconnect, state) do
+    case check_client_metadata(state.client_id) do
+      {:ok, _} ->
+        {:noreply, [], connect(state)}
+
+      {:error, reason} ->
+        message = "error connecting to :brod client #{inspect(state.client_id)}"
+        Logger.warn("#{message}. Reason: #{inspect(reason)}")
+        schedule_reconnect()
+        {:noreply, [], state}
+    end
   end
 
   @impl GenStage
@@ -488,5 +518,20 @@ defmodule BroadwayKafka.Producer do
 
   defp reset_buffer(state) do
     put_in(state.buffer, :queue.new())
+  end
+
+  defp schedule_reconnect() do
+    Process.send_after(self(), :reconnect, @reconnect_timeout)
+  end
+
+  # We call this to make sure the client has successfully
+  # stablished a new connection after restart
+  defp check_client_metadata(client_id) do
+    try do
+      :brod_client.get_metadata(client_id, :all)
+    catch
+      type, reason ->
+        {:error, {type, reason}}
+    end
   end
 end

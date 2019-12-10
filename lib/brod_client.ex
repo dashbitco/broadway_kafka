@@ -48,6 +48,9 @@ defmodule BroadwayKafka.BrodClient do
     with :ok <- :brod.start_client(config.hosts, client_id, _client_config = []),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
+      # TODO: Add ref to the config so we ca pattern match on it when receiving :DOWN
+      _client_ref = Process.monitor(client_id)
+      Process.unlink(group_coordinator)
       {:ok, group_coordinator}
     end
   end
@@ -60,6 +63,8 @@ defmodule BroadwayKafka.BrodClient do
   @impl true
   def ack(group_coordinator, generation_id, topic, partition, offset) do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
+    # TODO: Create an option :commit_on_ack. Default is true
+    :brod_group_coordinator.commit_offsets(group_coordinator, [{{topic, partition}, offset}])
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
