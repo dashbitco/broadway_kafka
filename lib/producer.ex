@@ -86,7 +86,7 @@ defmodule BroadwayKafka.Producer do
   less concurrency than topic/partitions assigned will result in individual processors handling more
   than one partition, decreasing the overall level of concurrency. Therefore, if you want to
   always be able to process messages at maximum concurrency (assuming you have enough resources
-  to do it), you should increase the numbers of concurrency up front to make sure you have enough
+  to do it), you should increase the concurrency up front to make sure you have enough
   processors to handle the extra messages received from new partitions assigned.
 
   > **Note**: Even if you don't plan to add more partitions to a Kafka topic, your pipeline can still
