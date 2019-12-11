@@ -33,11 +33,11 @@ Configure Broadway's producer using `BroadwayKafka.Producer`:
             group_id: "group_1",
             topics: ["test"],
           ]},
-          stages: 10
+          concurrency: 10
         ],
         processors: [
           default: [
-            stages: 10
+            concurrency: 10
           ]
         ]
       )

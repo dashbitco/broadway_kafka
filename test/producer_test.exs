@@ -242,7 +242,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "messages with the same topic/partition are processed in the same processor" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server, producers_stages: 2, processors_stages: 4)
+    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2, processors_concurrency: 4)
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -298,9 +298,9 @@ defmodule BroadwayKafka.ProducerTest do
 
     {:ok, pid} =
       start_broadway(message_server,
-        producers_stages: 2,
-        processors_stages: 4,
-        batchers_stages: 4
+        producers_concurrency: 2,
+        processors_concurrency: 4,
+        batchers_concurrency: 4
       )
 
     producer_1 = get_producer(pid, 0)
@@ -360,8 +360,8 @@ defmodule BroadwayKafka.ProducerTest do
 
     {:ok, pid} =
       start_broadway(message_server,
-        producers_stages: 2,
-        processors_stages: 4
+        producers_concurrency: 2,
+        processors_concurrency: 4
       )
 
     producer_1 = get_producer(pid, 0)
@@ -410,9 +410,9 @@ defmodule BroadwayKafka.ProducerTest do
 
     {:ok, pid} =
       start_broadway(message_server,
-        producers_stages: 2,
-        processors_stages: 4,
-        batchers_stages: 4
+        producers_concurrency: 2,
+        processors_concurrency: 4,
+        batchers_concurrency: 4
       )
 
     producer_1 = get_producer(pid, 0)
@@ -493,13 +493,13 @@ defmodule BroadwayKafka.ProducerTest do
   end
 
   defp start_broadway(message_server, opts \\ []) do
-    producers_stages = Keyword.get(opts, :producers_stages, 1)
-    processors_stages = Keyword.get(opts, :processors_stages, 1)
-    batchers_stages = Keyword.get(opts, :batchers_stages)
+    producers_concurrency = Keyword.get(opts, :producers_concurrency, 1)
+    processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
+    batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
 
     batchers =
-      if batchers_stages do
-        [default: [stages: batchers_stages, batch_size: 10, batch_timeout: 10]]
+      if batchers_concurrency do
+        [default: [concurrency: batchers_concurrency, batch_size: 10, batch_timeout: 10]]
       else
         []
       end
@@ -517,10 +517,10 @@ defmodule BroadwayKafka.ProducerTest do
              receive_interval: 0,
              max_bytes: 10
            ]},
-        stages: producers_stages
+        concurrency: producers_concurrency
       ],
       processors: [
-        default: [stages: processors_stages]
+        default: [concurrency: processors_concurrency]
       ],
       batchers: batchers
     )
