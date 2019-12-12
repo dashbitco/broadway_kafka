@@ -69,11 +69,11 @@ defmodule BroadwayKafka.Producer do
             group_id: "group_1",
             topics: ["test"],
           ]},
-          stages: 10
+          concurrency: 10
         ],
         processors: [
           default: [
-            stages: 10
+            concurrency: 10
           ]
         ]
       )
@@ -82,11 +82,11 @@ defmodule BroadwayKafka.Producer do
 
   The concurrency model provided by Kafka is based on partitioning, i.e., the more partitions
   you have, the more concurrency you get. However, in order to take advantage of this model
-  you need to set up the `:stages` options for your processors and batchers accordingly. Having
-  less stages than topic/partitions assigned will result in individual processors handling more
+  you need to set up the `:concurrency` options for your processors and batchers accordingly. Having
+  less concurrency than topic/partitions assigned will result in individual processors handling more
   than one partition, decreasing the overall level of concurrency. Therefore, if you want to
   always be able to process messages at maximum concurrency (assuming you have enough resources
-  to do it), you should increase the numbers of stages up front to make sure you have enough
+  to do it), you should increase the concurrency up front to make sure you have enough
   processors to handle the extra messages received from new partitions assigned.
 
   > **Note**: Even if you don't plan to add more partitions to a Kafka topic, your pipeline can still
@@ -275,7 +275,7 @@ defmodule BroadwayKafka.Producer do
   def prepare_for_start(_module, opts) do
     broadway_name = opts[:name]
 
-    producers_stages = opts[:producer][:stages]
+    producers_concurrency = opts[:producer][:concurrency]
     [first_processor_entry | other_processors_entries] = opts[:processors]
 
     {allocator, updated_processor_entry} =
@@ -283,7 +283,7 @@ defmodule BroadwayKafka.Producer do
         broadway_name,
         :processors,
         "processor",
-        producers_stages,
+        producers_concurrency,
         first_processor_entry
       )
 
@@ -294,7 +294,7 @@ defmodule BroadwayKafka.Producer do
             broadway_name,
             :batchers,
             "batcher_consumer",
-            producers_stages,
+            producers_concurrency,
             entry
           )
 
@@ -412,17 +412,17 @@ defmodule BroadwayKafka.Producer do
          broadway_name,
          group,
          prefix,
-         producers_stages,
+         producers_concurrency,
          consumer_entry
        ) do
     {consumer_name, consumer_config} = consumer_entry
     validate_partition_by(group, consumer_name, consumer_config)
 
-    consumer_stages = consumer_config[:stages]
+    consumer_concurrency = consumer_config[:concurrency]
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])
     partition_by = &Allocator.fetch!(allocator_name, {&1.metadata.topic, &1.metadata.partition})
     new_config = Keyword.put(consumer_config, :partition_by, partition_by)
-    allocator = {BroadwayKafka.Allocator, {allocator_name, producers_stages, consumer_stages}}
+    allocator = {BroadwayKafka.Allocator, {allocator_name, producers_concurrency, consumer_concurrency}}
     allocator_spec = Supervisor.child_spec(allocator, id: allocator_name)
 
     {allocator_spec, {consumer_name, new_config}}
