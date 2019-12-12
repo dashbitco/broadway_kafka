@@ -21,6 +21,15 @@ defmodule BroadwayKafka.Producer do
     * `:receive_interval` - Optional. The duration (in milliseconds) for which the producer
       waits before making a request for more messages. Default is 2000 (2 seconds).
 
+    * `:offset_commit_on_ack` - Optional. Tells Broadway to send or not an offset commit
+      request after each acknowledgemnt. Default is `true`. Setting this value to `false` can
+      increase performance since commit requests will respect the `:offset_commit_interval_seconds`
+      option. However, setting long commit intervals might lead to a large number of duplicated
+      records to be processed after a server restart or connection loss. If that's the case, make
+      sure your logic is idempotent when consuming records to avoid inconsistencies. Also, bear
+      in mind the the negative performance impact might be insignificant if you're using batchers
+      since only one commit request will be performed per batch.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the "Group config options" section below for a list of all available
       options.
@@ -107,8 +116,6 @@ defmodule BroadwayKafka.Producer do
   @behaviour Producer
   @behaviour :brod_group_member
 
-  @reconnect_timeout 1000
-
   defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
   defrecord :brod_received_assignment,
@@ -132,6 +139,7 @@ defmodule BroadwayKafka.Producer do
           group_coordinator: nil,
           receive_timer: nil,
           receive_interval: config.receive_interval,
+          reconnect_timeout: config.reconnect_timeout,
           acks: Acknowledger.new(),
           config: config,
           allocator_names: allocator_names(opts[:broadway]),
@@ -237,14 +245,14 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_info({:ack, key, offsets}, state) do
-    %{group_coordinator: group_coordinator, client: client, acks: acks} = state
+    %{group_coordinator: group_coordinator, client: client, acks: acks, config: config} = state
     {generation_id, topic, partition} = key
 
     {drained?, new_offset, updated_acks} = Acknowledger.update_current_offset(acks, key, offsets)
 
     if new_offset do
       try do
-        client.ack(group_coordinator, generation_id, topic, partition, new_offset)
+        client.ack(group_coordinator, generation_id, topic, partition, new_offset, config)
       catch
         kind, reason ->
           Logger.error(Exception.format(kind, reason, System.stacktrace()))
@@ -262,31 +270,21 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], new_state}
   end
 
-  @impl GenStage
-  def handle_info({:DOWN, _ref, _, {client, _}, _reason}, %{client_id: client} = state) do
-    %{group_coordinator: group_coordinator} = state
-    schedule_reconnect()
-
+  def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do
+    state.client.stop_group_coordinator(state.group_coordinator)
     state = reset_buffer(state)
-
-    if Process.alive?(group_coordinator) do
-      Process.exit(group_coordinator, :kill)
-    end
+    schedule_reconnect(state.reconnect_timeout)
 
     {:noreply, [], %{state | group_coordinator: nil}}
   end
 
   @impl GenStage
   def handle_info(:reconnect, state) do
-    case check_client_metadata(state.client_id) do
-      {:ok, _} ->
-        {:noreply, [], connect(state)}
-
-      {:error, reason} ->
-        message = "error connecting to :brod client #{inspect(state.client_id)}"
-        Logger.warn("#{message}. Reason: #{inspect(reason)}")
-        schedule_reconnect()
-        {:noreply, [], state}
+    if state.client.connected?(state.client_id) do
+      {:noreply, [], connect(state)}
+    else
+      schedule_reconnect(state.reconnect_timeout)
+      {:noreply, [], state}
     end
   end
 
@@ -520,18 +518,7 @@ defmodule BroadwayKafka.Producer do
     put_in(state.buffer, :queue.new())
   end
 
-  defp schedule_reconnect() do
-    Process.send_after(self(), :reconnect, @reconnect_timeout)
-  end
-
-  # We call this to make sure the client has successfully
-  # stablished a new connection after restart
-  defp check_client_metadata(client_id) do
-    try do
-      :brod_client.get_metadata(client_id, :all)
-    catch
-      type, reason ->
-        {:error, {type, reason}}
-    end
+  defp schedule_reconnect(timeout) do
+    Process.send_after(self(), :reconnect, timeout)
   end
 end

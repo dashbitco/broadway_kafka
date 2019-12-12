@@ -45,8 +45,10 @@ defmodule BroadwayKafka.ProducerTest do
     def init(opts), do: {:ok, Map.new(opts)}
 
     @impl true
-    def setup(_stage_pid, _client_id, _callback_module, config) do
-      {:ok, config[:test_pid]}
+    def setup(_stage_pid, client_id, _callback_module, config) do
+      Process.monitor(client_id)
+      send(config[:test_pid], {:setup, client_id})
+      {:ok, :fake_coord}
     end
 
     @impl true
@@ -67,9 +69,19 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def ack(test_pid, _generation_id, topic, partition, offset) do
+    def ack(_group_coordinator, _generation_id, topic, partition, offset, config) do
       info = %{offset: offset, topic: topic, partition: partition, pid: self()}
-      send(test_pid, {:ack, info})
+      send(config[:test_pid], {:ack, info})
+    end
+
+    @impl true
+    def connected?(client_id) do
+      {:connected?, Process.alive?(client_id) && Agent.get(client_id, & &1)}
+    end
+
+    @impl true
+    def stop_group_coordinator(_pid) do
+      :ok
     end
   end
 
@@ -159,7 +171,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "single producer receiving messages from a single topic/partition" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
 
     producer = get_producer(pid)
     put_assignments(producer, [[topic: "topic", partition: 0]])
@@ -174,7 +186,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "single producer receiving messages from multiple topic/partitions" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
 
     producer = get_producer(pid)
 
@@ -211,7 +223,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "fetch messages by chuncks according to :max_bytes" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
 
     producer = get_producer(pid)
     put_assignments(producer, [[topic: "topic", partition: 0]])
@@ -227,7 +239,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "keep trying to receive new messages when the queue is empty" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
 
     producer = get_producer(pid)
     put_assignments(producer, [[topic: "topic", partition: 0]])
@@ -242,7 +254,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "messages with the same topic/partition are processed in the same processor" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server, producers_stages: 2, processors_stages: 4)
+    {:ok, pid, _} = start_broadway(message_server, producers_stages: 2, processors_stages: 4)
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -296,7 +308,7 @@ defmodule BroadwayKafka.ProducerTest do
   test "batches with the same topic/partition are processed in the same batch consumer" do
     {:ok, message_server} = MessageServer.start_link()
 
-    {:ok, pid} =
+    {:ok, pid, _} =
       start_broadway(message_server,
         producers_stages: 2,
         processors_stages: 4,
@@ -358,7 +370,7 @@ defmodule BroadwayKafka.ProducerTest do
   test "messages from the same topic/partition are acknowledged in order" do
     {:ok, message_server} = MessageServer.start_link()
 
-    {:ok, pid} =
+    {:ok, pid, _} =
       start_broadway(message_server,
         producers_stages: 2,
         processors_stages: 4
@@ -408,7 +420,7 @@ defmodule BroadwayKafka.ProducerTest do
   test "batches from the same topic/partition are acknowledged in order" do
     {:ok, message_server} = MessageServer.start_link()
 
-    {:ok, pid} =
+    {:ok, pid, _} =
       start_broadway(message_server,
         producers_stages: 2,
         processors_stages: 4,
@@ -458,7 +470,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "continue fetching messages after rebalancing" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
     producer = get_producer(pid)
     put_assignments(producer, [[topic: "topic", partition: 0]])
 
@@ -475,7 +487,7 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "stop trying to receive new messages after start draining" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid, _} = start_broadway(message_server)
     producer = get_producer(pid)
     put_assignments(producer, [[topic: "topic", partition: 0]])
 
@@ -492,6 +504,27 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "if connection is lost, keep trying to reconnect until the :brod client is ready" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid, broadway_name} = start_broadway(message_server)
+    client_id = Module.concat(broadway_name, FakeClient)
+
+    assert_receive {:setup, ^client_id}
+
+    Process.exit(Process.whereis(client_id), :kill)
+    assert_receive {:connected?, false}
+
+    {:ok, _} = Agent.start(fn -> false end, name: client_id)
+    assert_receive {:connected?, false}
+
+    Agent.update(client_id, fn _ -> true end)
+
+    assert_receive {:connected?, true}
+    assert_receive {:setup, ^client_id}
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_stages = Keyword.get(opts, :producers_stages, 1)
     processors_stages = Keyword.get(opts, :processors_stages, 1)
@@ -504,26 +537,35 @@ defmodule BroadwayKafka.ProducerTest do
         []
       end
 
-    Broadway.start_link(Forwarder,
-      name: new_unique_name(),
-      context: %{test_pid: self()},
-      producer: [
-        module:
-          {BroadwayKafka.Producer,
-           [
-             client: FakeKafkaClient,
-             test_pid: self(),
-             message_server: message_server,
-             receive_interval: 0,
-             max_bytes: 10
-           ]},
-        stages: producers_stages
-      ],
-      processors: [
-        default: [stages: processors_stages]
-      ],
-      batchers: batchers
-    )
+    broadway_name = new_unique_name()
+    client_id = Module.concat(broadway_name, FakeClient)
+    {:ok, _} = Agent.start(fn -> true end, name: client_id)
+
+    {:ok, pid} =
+      Broadway.start_link(Forwarder,
+        name: broadway_name,
+        context: %{test_pid: self()},
+        producer: [
+          module:
+            {BroadwayKafka.Producer,
+             [
+               client: FakeKafkaClient,
+               client_id: client_id,
+               test_pid: self(),
+               message_server: message_server,
+               receive_interval: 0,
+               reconnect_timeout: 10,
+               max_bytes: 10
+             ]},
+          stages: producers_stages
+        ],
+        processors: [
+          default: [stages: processors_stages]
+        ],
+        batchers: batchers
+      )
+
+    {:ok, pid, broadway_name}
   end
 
   defp put_assignments(producer, assignments) do
