@@ -6,7 +6,8 @@ defmodule BroadwayKafka.KafkaClient do
            client_id: any,
            group_id: any,
            topics: any,
-           group_config: keyword
+           group_config: keyword,
+           client_config: keyword
          }
 
   @callback init(opts :: any) :: {:ok, config} | {:error, any}

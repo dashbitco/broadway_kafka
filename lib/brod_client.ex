@@ -20,6 +20,10 @@ defmodule BroadwayKafka.BrodClient do
     :max_bytes
   ]
 
+  @supported_client_config_options [
+    :ssl,
+  ]
+
   @default_receive_interval 2000
 
   @impl true
@@ -30,7 +34,8 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, receive_interval} <-
            validate(opts, :receive_interval, default: @default_receive_interval),
          {:ok, group_config} <- validate_group_config(opts),
-         {:ok, fetch_config} <- validate_fetch_config(opts) do
+         {:ok, fetch_config} <- validate_fetch_config(opts),
+         {:ok, client_config} <- validate_client_config(opts) do
       {:ok,
        %{
          hosts: hosts,
@@ -38,14 +43,15 @@ defmodule BroadwayKafka.BrodClient do
          topics: topics,
          receive_interval: receive_interval,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-         fetch_config: Map.new(fetch_config || [])
+         fetch_config: Map.new(fetch_config || []),
+         client_config: client_config
        }}
     end
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, _client_config = []),
+    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       {:ok, group_coordinator}
@@ -131,6 +137,14 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_bytes, "a positive integer", value)
 
+  defp validate_option(:ssl, value) do
+    if Keyword.keyword?(value) do
+      {:ok, value}
+    else
+      validation_error(:ssl, "a keyword list of SSL/TLS client options", value)
+    end
+  end
+
   defp validate_option(_, value), do: {:ok, value}
 
   defp validation_error(option, expected, value) do
@@ -152,6 +166,14 @@ defmodule BroadwayKafka.BrodClient do
            validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options),
          {:ok, _} <- validate(config, :min_bytes),
          {:ok, _} <- validate(config, :max_bytes) do
+      {:ok, config}
+    end
+  end
+
+  defp validate_client_config(opts) do
+    with {:ok, [_ | _] = config} <-
+            validate_supported_opts(opts, :client_config, @supported_client_config_options),
+         {:ok, _} <- validate(config, :ssl) do
       {:ok, config}
     end
   end
