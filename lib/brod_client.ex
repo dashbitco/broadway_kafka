@@ -9,6 +9,8 @@ defmodule BroadwayKafka.BrodClient do
   # to avoid problems in case :brod's default policy changes in the future
   @offset_commit_policy :commit_to_kafka_v2
 
+  @partition_assignment_strategy :callback_implemented
+
   @supported_group_config_options [
     :offset_commit_interval_seconds,
     :rejoin_delay_seconds,
@@ -40,6 +42,12 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts) do
+
+      default_group_config = [
+        offset_commit_policy: @offset_commit_policy,
+        partition_assignment_strategy: @partition_assignment_strategy
+      ]
+
       {:ok,
        %{
          hosts: hosts,
@@ -48,7 +56,7 @@ defmodule BroadwayKafka.BrodClient do
          receive_interval: receive_interval,
          reconnect_timeout: reconnect_timeout,
          offset_commit_on_ack: offset_commit_on_ack,
-         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
+         group_config: group_config ++ default_group_config,
          fetch_config: Map.new(fetch_config || [])
        }}
     end

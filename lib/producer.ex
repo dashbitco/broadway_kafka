@@ -146,7 +146,8 @@ defmodule BroadwayKafka.Producer do
           revoke_caller: nil,
           demand: 0,
           shutting_down?: false,
-          buffer: :queue.new()
+          buffer: :queue.new(),
+          last_assignments: []
         }
 
         {:producer, connect(state)}
@@ -184,6 +185,11 @@ defmodule BroadwayKafka.Producer do
     else
       {:noreply, [], %{state | revoke_caller: from}}
     end
+  end
+
+  @impl GenStage
+  def handle_call(:get_last_assignments, _from, state) do
+    {:reply, state.last_assignments, [], state}
   end
 
   @impl GenStage
@@ -240,7 +246,7 @@ defmodule BroadwayKafka.Producer do
       Allocator.allocate(allocator_name, broadway_index, topics_partitions)
     end
 
-    {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list)}}
+    {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list), last_assignments: topics_partitions}}
   end
 
   @impl GenStage
@@ -291,6 +297,49 @@ defmodule BroadwayKafka.Producer do
   @impl GenStage
   def handle_info(_, state) do
     {:noreply, [], state}
+  end
+
+  @impl :brod_group_member
+  def assign_partitions(_pid, members, topics_partitions) do
+    group_member_id_by_assignment =
+      for {group_member_id, {_, _, _, user_data}} <- members,
+          producer_pid = :erlang.binary_to_term(user_data),
+          assignment <- GenStage.call(producer_pid, :get_last_assignments),
+          into: %{} do
+        {assignment, group_member_id}
+      end
+
+      %{assignments: assignments} =
+        Enum.reduce(topics_partitions, %{members: members, assignments: []}, fn topic_partition , acc ->
+          case group_member_id_by_assignment[topic_partition] do
+            nil ->
+              [{group_member_id, _} = member | other_members] = acc.members
+              {topic, partition} = topic_partition
+              assignment = {group_member_id, topic, partition}
+              %{acc | members: other_members ++ [member], assignments: [assignment | acc.assignments]}
+
+            group_member_id ->
+              {topic, partition} = topic_partition
+              assignment = {group_member_id, topic, partition}
+              %{acc | assignments: [assignment | acc.assignments]}
+          end
+        end)
+
+     assignments
+     |> Enum.group_by(fn {group_member_id, _, _} -> group_member_id end)
+     |> Enum.map(fn {group_member_id, list} ->
+       list = Enum.group_by(list,
+         fn {_, topic, _} -> topic end,
+         fn {_, _, partition} -> partition end
+       ) |> Enum.map(fn {k, v} -> {k, v} end)
+
+       {group_member_id, list}
+     end)
+  end
+
+  @impl :brod_group_member
+  def user_data(producer_pid) do
+    :erlang.term_to_binary(producer_pid)
   end
 
   @impl Producer
