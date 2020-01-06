@@ -93,7 +93,6 @@ defmodule BroadwayKafka.ProducerTest do
         end
 
       connected?
-      # send{:connected?, connected?}
     end
 
     @impl true

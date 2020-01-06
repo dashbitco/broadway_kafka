@@ -59,7 +59,6 @@ defmodule BroadwayKafka.BrodClient do
     with :ok <- :brod.start_client(config.hosts, client_id, _client_config = []),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
-      # TODO: Add ref to the config so we ca pattern match on it when receiving :DOWN
       _client_ref = Process.monitor(client_id)
       Process.unlink(group_coordinator)
       {:ok, group_coordinator}
