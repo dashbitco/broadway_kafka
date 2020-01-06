@@ -176,6 +176,11 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
+  def handle_call(:drain_after_revoke, _from, %{group_coordinator: nil} = state) do
+    {:reply, :ok, [], state}
+  end
+
+  @impl GenStage
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     state = reset_buffer(state)
 
@@ -450,7 +455,10 @@ defmodule BroadwayKafka.Producer do
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])
     partition_by = &Allocator.fetch!(allocator_name, {&1.metadata.topic, &1.metadata.partition})
     new_config = Keyword.put(consumer_config, :partition_by, partition_by)
-    allocator = {BroadwayKafka.Allocator, {allocator_name, producers_concurrency, consumer_concurrency}}
+
+    allocator =
+      {BroadwayKafka.Allocator, {allocator_name, producers_concurrency, consumer_concurrency}}
+
     allocator_spec = Supervisor.child_spec(allocator, id: allocator_name)
 
     {allocator_spec, {consumer_name, new_config}}
