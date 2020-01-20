@@ -1,5 +1,5 @@
 %{
-  "broadway": {:git, "https://github.com/plataformatec/broadway.git", "08497708e10867935f2e92351e4cde9e4a57135e", []},
+  "broadway": {:git, "https://github.com/dashbitco/broadway.git", "08497708e10867935f2e92351e4cde9e4a57135e", []},
   "brod": {:hex, :brod, "3.9.2", "00206e09bad7cc352b8697521edc9dff84895e3117863459b7622e04b03b4150", [:make, :rebar, :rebar3], [{:kafka_protocol, "2.3.1", [hex: :kafka_protocol, repo: "hexpm", optional: false]}, {:supervisor3, "1.1.8", [hex: :supervisor3, repo: "hexpm", optional: false]}], "hexpm"},
   "crc32cer": {:hex, :crc32cer, "0.1.3", "8984906c4b4fae6aa292c48f286a1c83b19ad44bd102287acb94d696015967ce", [:make, :rebar, :rebar3], [], "hexpm"},
   "gen_stage": {:hex, :gen_stage, "0.14.3", "d0c66f1c87faa301c1a85a809a3ee9097a4264b2edf7644bf5c123237ef732bf", [:mix], [], "hexpm"},
