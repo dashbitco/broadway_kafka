@@ -52,7 +52,7 @@ Configure Broadway's producer using `BroadwayKafka.Producer`:
 
 ## License
 
-Copyright 2019 Plataformatec
+Copyright 2019 Plataformatec\
 Copyright 2020 Dashbit
 
   Licensed under the Apache License, Version 2.0 (the "License");
