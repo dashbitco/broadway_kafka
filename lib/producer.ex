@@ -366,6 +366,12 @@ defmodule BroadwayKafka.Producer do
     :ok
   end
 
+  @impl GenStage
+  def terminate(_reason, state) do
+    state.client.stop_group_coordinator(state.group_coordinator)
+    :ok
+  end
+
   defp maybe_schedule_poll(%{demand: 0} = state, _interval) do
     {:noreply, [], state}
   end
@@ -416,8 +422,8 @@ defmodule BroadwayKafka.Producer do
         end)
 
       {:error, reason} ->
-        Logger.error("Cannot fetch records from Kafka. Reason: #{inspect(reason)}")
-        {[], 0, offset}
+        raise "cannot fetch records from Kafka (partition=#{partition} " <>
+          "offset=#{offset} topic=#{topic}). Reason: #{inspect(reason)}"
     end
   end
 
