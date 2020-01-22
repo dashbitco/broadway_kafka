@@ -283,6 +283,13 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], %{state | group_coordinator: nil}}
   end
 
+  def handle_info({:DOWN, _ref, _, coord, _reason}, %{group_coordinator: coord} = state) do
+    state = reset_buffer(state)
+    schedule_reconnect(state.reconnect_timeout)
+
+    {:noreply, [], %{state | group_coordinator: nil}}
+  end
+
   @impl GenStage
   def handle_info(:reconnect, state) do
     if state.client.connected?(state.client_id) do
