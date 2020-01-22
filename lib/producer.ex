@@ -422,8 +422,8 @@ defmodule BroadwayKafka.Producer do
         end)
 
       {:error, reason} ->
-        raise "cannot fetch records from Kafka (partition=#{partition} " <>
-          "offset=#{offset} topic=#{topic}). Reason: #{inspect(reason)}"
+        raise "cannot fetch records from Kafka (topic=#{topic} partition=#{partition} " <>
+          "offset=#{offset}). Reason: #{inspect(reason)}"
     end
   end
 
