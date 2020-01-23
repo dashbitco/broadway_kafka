@@ -1,6 +1,6 @@
 # BroadwayKafka
 
-A Kafka connector for [Broadway](https://github.com/plataformatec/broadway).
+A Kafka connector for [Broadway](https://github.com/dashbitco/broadway).
 
 Documentation can be found at [https://hexdocs.pm/broadway_kafka](https://hexdocs.pm/broadway_kafka).
 
@@ -52,7 +52,8 @@ Configure Broadway's producer using `BroadwayKafka.Producer`:
 
 ## License
 
-Copyright 2019 Plataformatec
+Copyright 2019 Plataformatec\
+Copyright 2020 Dashbit
 
   Licensed under the Apache License, Version 2.0 (the "License");
   you may not use this file except in compliance with the License.

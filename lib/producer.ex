@@ -21,6 +21,15 @@ defmodule BroadwayKafka.Producer do
     * `:receive_interval` - Optional. The duration (in milliseconds) for which the producer
       waits before making a request for more messages. Default is 2000 (2 seconds).
 
+    * `:offset_commit_on_ack` - Optional. Tells Broadway to send or not an offset commit
+      request after each acknowledgemnt. Default is `true`. Setting this value to `false` can
+      increase performance since commit requests will respect the `:offset_commit_interval_seconds`
+      option. However, setting long commit intervals might lead to a large number of duplicated
+      records to be processed after a server restart or connection loss. If that's the case, make
+      sure your logic is idempotent when consuming records to avoid inconsistencies. Also, bear
+      in mind the the negative performance impact might be insignificant if you're using batchers
+      since only one commit request will be performed per batch.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the "Group config options" section below for a list of all available
       options.
@@ -141,6 +150,7 @@ defmodule BroadwayKafka.Producer do
           group_coordinator: nil,
           receive_timer: nil,
           receive_interval: config.receive_interval,
+          reconnect_timeout: config.reconnect_timeout,
           acks: Acknowledger.new(),
           config: config,
           allocator_names: allocator_names(opts[:broadway]),
@@ -174,6 +184,11 @@ defmodule BroadwayKafka.Producer do
   @impl GenStage
   def handle_demand(incoming_demand, %{demand: demand} = state) do
     maybe_schedule_poll(%{state | demand: demand + incoming_demand}, 0)
+  end
+
+  @impl GenStage
+  def handle_call(:drain_after_revoke, _from, %{group_coordinator: nil} = state) do
+    {:reply, :ok, [], state}
   end
 
   @impl GenStage
@@ -246,14 +261,14 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_info({:ack, key, offsets}, state) do
-    %{group_coordinator: group_coordinator, client: client, acks: acks} = state
+    %{group_coordinator: group_coordinator, client: client, acks: acks, config: config} = state
     {generation_id, topic, partition} = key
 
     {drained?, new_offset, updated_acks} = Acknowledger.update_current_offset(acks, key, offsets)
 
     if new_offset do
       try do
-        client.ack(group_coordinator, generation_id, topic, partition, new_offset)
+        client.ack(group_coordinator, generation_id, topic, partition, new_offset, config)
       catch
         kind, reason ->
           Logger.error(Exception.format(kind, reason, System.stacktrace()))
@@ -269,6 +284,31 @@ defmodule BroadwayKafka.Producer do
       end
 
     {:noreply, [], new_state}
+  end
+
+  def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do
+    state.client.stop_group_coordinator(state.group_coordinator)
+    state = reset_buffer(state)
+    schedule_reconnect(state.reconnect_timeout)
+
+    {:noreply, [], %{state | group_coordinator: nil}}
+  end
+
+  def handle_info({:DOWN, _ref, _, coord, _reason}, %{group_coordinator: coord} = state) do
+    state = reset_buffer(state)
+    schedule_reconnect(state.reconnect_timeout)
+
+    {:noreply, [], %{state | group_coordinator: nil}}
+  end
+
+  @impl GenStage
+  def handle_info(:reconnect, state) do
+    if state.client.connected?(state.client_id) do
+      {:noreply, [], connect(state)}
+    else
+      schedule_reconnect(state.reconnect_timeout)
+      {:noreply, [], state}
+    end
   end
 
   @impl GenStage
@@ -337,6 +377,12 @@ defmodule BroadwayKafka.Producer do
     :ok
   end
 
+  @impl GenStage
+  def terminate(_reason, state) do
+    state.client.stop_group_coordinator(state.group_coordinator)
+    :ok
+  end
+
   defp maybe_schedule_poll(%{demand: 0} = state, _interval) do
     {:noreply, [], state}
   end
@@ -387,8 +433,8 @@ defmodule BroadwayKafka.Producer do
         end)
 
       {:error, reason} ->
-        Logger.error("Cannot fetch records from Kafka. Reason: #{inspect(reason)}")
-        {[], 0, offset}
+        raise "cannot fetch records from Kafka (topic=#{topic} partition=#{partition} " <>
+          "offset=#{offset}). Reason: #{inspect(reason)}"
     end
   end
 
@@ -433,7 +479,10 @@ defmodule BroadwayKafka.Producer do
     allocator_name = Module.concat([broadway_name, "Allocator_#{prefix}_#{consumer_name}"])
     partition_by = &Allocator.fetch!(allocator_name, {&1.metadata.topic, &1.metadata.partition})
     new_config = Keyword.put(consumer_config, :partition_by, partition_by)
-    allocator = {BroadwayKafka.Allocator, {allocator_name, producers_concurrency, consumer_concurrency}}
+
+    allocator =
+      {BroadwayKafka.Allocator, {allocator_name, producers_concurrency, consumer_concurrency}}
+
     allocator_spec = Supervisor.child_spec(allocator, id: allocator_name)
 
     {allocator_spec, {consumer_name, new_config}}
@@ -499,5 +548,9 @@ defmodule BroadwayKafka.Producer do
 
   defp reset_buffer(state) do
     put_in(state.buffer, :queue.new())
+  end
+
+  defp schedule_reconnect(timeout) do
+    Process.send_after(self(), :reconnect, timeout)
   end
 end
