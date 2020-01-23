@@ -1,6 +1,7 @@
 defmodule BroadwayKafka.ProducerTest do
   use ExUnit.Case
 
+  import ExUnit.CaptureLog
   import Record, only: [defrecord: 2, extract: 2]
 
   defrecord :brod_received_assignment,
@@ -45,8 +46,14 @@ defmodule BroadwayKafka.ProducerTest do
     def init(opts), do: {:ok, Map.new(opts)}
 
     @impl true
-    def setup(_stage_pid, _client_id, _callback_module, config) do
-      {:ok, config[:test_pid]}
+    def setup(_stage_pid, client_id, _callback_module, config) do
+      if !Process.whereis(client_id) do
+        {:ok, _pid} = Agent.start(fn -> true end, name: client_id)
+        Process.monitor(client_id)
+      end
+
+      send(config[:test_pid], {:setup, client_id})
+      {:ok, :fake_coord}
     end
 
     @impl true
@@ -67,9 +74,30 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def ack(test_pid, _generation_id, topic, partition, offset) do
+    def ack(_group_coordinator, _generation_id, topic, partition, offset, config) do
       info = %{offset: offset, topic: topic, partition: partition, pid: self()}
-      send(test_pid, {:ack, info})
+      ack_raises_on_offset = config[:ack_raises_on_offset]
+
+      if ack_raises_on_offset && ack_raises_on_offset == offset do
+        raise "Ack failed on offset #{offset}"
+      end
+
+      send(config[:test_pid], {:ack, info})
+    end
+
+    @impl true
+    def connected?(client_id) do
+      connected? =
+        if pid = Process.whereis(client_id) do
+          Process.alive?(pid) && Agent.get(client_id, & &1)
+        end
+
+      connected?
+    end
+
+    @impl true
+    def stop_group_coordinator(_pid) do
+      :ok
     end
   end
 
@@ -242,7 +270,9 @@ defmodule BroadwayKafka.ProducerTest do
 
   test "messages with the same topic/partition are processed in the same processor" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server, producers_concurrency: 2, processors_concurrency: 4)
+
+    {:ok, pid} =
+      start_broadway(message_server, producers_concurrency: 2, processors_concurrency: 4)
 
     producer_1 = get_producer(pid, 0)
     producer_2 = get_producer(pid, 1)
@@ -492,10 +522,51 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "if connection is lost, reconnect when :brod client is ready again" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+
+    assert_receive {:setup, client_id}
+
+    Process.exit(Process.whereis(client_id), :kill)
+    refute_receive {:setup, _}
+
+    {:ok, _} = Agent.start(fn -> false end, name: client_id)
+    refute_receive {:setup, _}
+
+    Agent.update(client_id, fn _ -> true end)
+    assert_receive {:setup, ^client_id}
+
+    stop_broadway(pid)
+  end
+
+  test "keep the producer alive on ack errors and log the exception" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, ack_raises_on_offset: 4)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+
+    MessageServer.push_messages(message_server, 1..2, topic: "topic", partition: 0)
+    assert_receive {:ack, %{topic: "topic", partition: 0, pid: ^producer_pid}}
+
+    assert capture_log(fn ->
+             MessageServer.push_messages(message_server, 3..4, topic: "topic", partition: 0)
+             refute_receive {:ack, %{topic: "topic", partition: 0, pid: ^producer_pid}}
+           end) =~ "(RuntimeError) Ack failed on offset"
+
+    MessageServer.push_messages(message_server, 5..6, topic: "topic", partition: 0)
+    assert_receive {:ack, %{topic: "topic", partition: 0, pid: ^producer_pid}}
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_concurrency = Keyword.get(opts, :producers_concurrency, 1)
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
+    ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
 
     batchers =
       if batchers_concurrency do
@@ -504,26 +575,31 @@ defmodule BroadwayKafka.ProducerTest do
         []
       end
 
-    Broadway.start_link(Forwarder,
-      name: new_unique_name(),
-      context: %{test_pid: self()},
-      producer: [
-        module:
-          {BroadwayKafka.Producer,
-           [
-             client: FakeKafkaClient,
-             test_pid: self(),
-             message_server: message_server,
-             receive_interval: 0,
-             max_bytes: 10
-           ]},
-        concurrency: producers_concurrency
-      ],
-      processors: [
-        default: [concurrency: processors_concurrency]
-      ],
-      batchers: batchers
-    )
+    {:ok, pid} =
+      Broadway.start_link(Forwarder,
+        name: new_unique_name(),
+        context: %{test_pid: self()},
+        producer: [
+          module:
+            {BroadwayKafka.Producer,
+             [
+               client: FakeKafkaClient,
+               test_pid: self(),
+               message_server: message_server,
+               receive_interval: 0,
+               reconnect_timeout: 10,
+               max_bytes: 10,
+               ack_raises_on_offset: ack_raises_on_offset
+             ]},
+          concurrency: producers_concurrency
+        ],
+        processors: [
+          default: [concurrency: processors_concurrency]
+        ],
+        batchers: batchers
+      )
+
+    {:ok, pid}
   end
 
   defp put_assignments(producer, assignments) do

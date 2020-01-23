@@ -22,6 +22,11 @@ defmodule BroadwayKafka.BrodClient do
 
   @default_receive_interval 2000
 
+  # Private option. Not exposed to the user
+  @default_reconnect_timeout 1000
+
+  @default_offset_commit_on_ack true
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts, required: true),
@@ -29,6 +34,10 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, topics} <- validate(opts, :topics, required: true),
          {:ok, receive_interval} <-
            validate(opts, :receive_interval, default: @default_receive_interval),
+         {:ok, reconnect_timeout} <-
+           validate(opts, :reconnect_timeout, default: @default_reconnect_timeout),
+         {:ok, offset_commit_on_ack} <-
+           validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts) do
       {:ok,
@@ -37,6 +46,8 @@ defmodule BroadwayKafka.BrodClient do
          group_id: group_id,
          topics: topics,
          receive_interval: receive_interval,
+         reconnect_timeout: reconnect_timeout,
+         offset_commit_on_ack: offset_commit_on_ack,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || [])
        }}
@@ -48,6 +59,9 @@ defmodule BroadwayKafka.BrodClient do
     with :ok <- :brod.start_client(config.hosts, client_id, _client_config = []),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
+      Process.monitor(client_id)
+      Process.monitor(group_coordinator)
+      Process.unlink(group_coordinator)
       {:ok, group_coordinator}
     end
   end
@@ -58,8 +72,40 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   @impl true
-  def ack(group_coordinator, generation_id, topic, partition, offset) do
+  def ack(group_coordinator, generation_id, topic, partition, offset, config) do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
+
+    if group_coordinator && config.offset_commit_on_ack do
+      :brod_group_coordinator.commit_offsets(group_coordinator, [{{topic, partition}, offset}])
+    end
+
+    :ok
+  end
+
+  @impl true
+  def connected?(client_id) do
+    try do
+      match?({:ok, _}, :brod_client.get_metadata(client_id, :all))
+    catch
+      _type, _reason ->
+        false
+    end
+  end
+
+  @impl true
+  def stop_group_coordinator(nil) do
+    :ok
+  end
+
+  def stop_group_coordinator(group_coordinator) do
+    ref = Process.monitor(group_coordinator)
+    Process.exit(group_coordinator, :kill)
+
+    receive do
+      {:DOWN, ^ref, _, _, _} -> :ok
+    end
+
+    :ok
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
@@ -114,6 +160,12 @@ defmodule BroadwayKafka.BrodClient do
 
   defp validate_option(:receive_interval, value) when not is_integer(value) or value < 0,
     do: validation_error(:receive_interval, "a non-negative integer", value)
+
+  defp validate_option(:reconnect_timeout, value) when not is_integer(value) or value < 0,
+    do: validation_error(:reconnect_timeout, "a non-negative integer", value)
+
+  defp validate_option(:offset_commit_on_ack, value) when not is_boolean(value),
+    do: validation_error(:offset_commit_on_ack, "a boolean", value)
 
   defp validate_option(:offset_commit_interval_seconds, value)
        when not is_integer(value) or value < 1,

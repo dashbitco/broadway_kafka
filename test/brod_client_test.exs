@@ -69,6 +69,30 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{receive_interval: 1000}} = BrodClient.init(opts)
     end
 
+    test ":reconnect_timeout is a non-negative integer with default value 1000" do
+      assert {:ok, %{reconnect_timeout: 1000}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :reconnect_timeout, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :reconnect_timeout to be a non-negative integer, got: :an_atom"}
+
+      opts = Keyword.put(@opts, :reconnect_timeout, 2000)
+      assert {:ok, %{reconnect_timeout: 2000}} = BrodClient.init(opts)
+    end
+
+    test ":offset_commit_on_ack is a boolean with default value true" do
+      assert {:ok, %{offset_commit_on_ack: true}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :offset_commit_on_ack, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :offset_commit_on_ack to be a boolean, got: :an_atom"}
+
+      opts = Keyword.put(@opts, :offset_commit_on_ack, false)
+      assert {:ok, %{offset_commit_on_ack: false}} = BrodClient.init(opts)
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
