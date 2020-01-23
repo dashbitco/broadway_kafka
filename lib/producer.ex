@@ -37,6 +37,9 @@ defmodule BroadwayKafka.Producer do
     * `:fetch_config` - Optional. A list of options used when fetching messages. See the
       "Fetch config options" section below for a list of all available options.
 
+    * `:client_config` - Optional. A list of options used when creating the client. See the
+      "Client config options" section below for a list of all available options.
+
   ## Group config options
 
   The available options that will be passed to `:brod`'s group coordinator.
@@ -63,6 +66,14 @@ defmodule BroadwayKafka.Producer do
     * `:max_bytes` - Optional. The maximum amount of data to be fetched at a time from a single
       partition. Default is 1048576 (1 MiB). Setting greater values can improve server
       throughput at the cost of more memory consumption.
+
+  ## Client config options
+
+  The available options that will be internally passed to `:brod.start_client/3`.
+
+    * `:ssl` - Optional. A list of options to use when connecting via SSL/TLS. See the
+    [`tls_client_option`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) documentation
+    for more information. Default is no ssl options.
 
   > **Note**: Currently, Broadway does not support all options provided by `:brod`. If you
   have a scenario where you need any extra option that is not listed above, please open an

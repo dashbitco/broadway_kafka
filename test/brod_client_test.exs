@@ -8,7 +8,8 @@ defmodule BroadwayKafka.BrodClientTest do
     hosts: [host: 9092],
     topics: ["topic"],
     group_config: [],
-    fetch_config: []
+    fetch_config: [],
+    client_config: []
   ]
 
   describe "validate init options" do
@@ -150,6 +151,28 @@ defmodule BroadwayKafka.BrodClientTest do
       opts = put_in(@opts, [:fetch_config, :max_bytes], 3)
       {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
       assert fetch_config[:max_bytes] == 3
+    end
+
+    test ":ssl is an optional keyword list" do
+      opts = put_in(@opts, [:client_config, :ssl], :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error,
+                "expected :ssl to be a keyword list of SSL/TLS client options, got: :an_atom"}
+
+      opts =
+        put_in(@opts, [:client_config, :ssl],
+          cacertfile: "ca.crt",
+          keyfile: "client.key",
+          certfile: "client.crt"
+        )
+
+      assert {:ok,
+              %{
+                client_config: [
+                  ssl: [cacertfile: "ca.crt", keyfile: "client.key", certfile: "client.crt"]
+                ]
+              }} = BrodClient.init(opts)
     end
   end
 end
