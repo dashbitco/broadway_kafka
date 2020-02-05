@@ -30,6 +30,10 @@ defmodule BroadwayKafka.Producer do
       in mind the the negative performance impact might be insignificant if you're using batchers
       since only one commit request will be performed per batch.
 
+    * `:offset_reset_policy` - Optional. Defines the offset to be used when there's no initial
+      offset in Kafka or if the current offset has expired. Possible values are `:earliest` or
+      `:latest`. Default is `:latest`.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the "Group config options" section below for a list of all available
       options.
@@ -241,7 +245,12 @@ defmodule BroadwayKafka.Producer do
           begin_offset: begin_offset
         ) = assignment
 
-        offset = if begin_offset == :undefined, do: 0, else: begin_offset
+        hosts = state.config.hosts
+        offset_reset_policy = state.config[:offset_reset_policy]
+
+        offset =
+          state.client.resolve_offset(hosts, topic, partition, begin_offset, offset_reset_policy)
+
         {group_generation_id, topic, partition, offset}
       end)
 
@@ -362,7 +371,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def get_committed_offsets(_pid, _topics_partitions) do
-    {:ok, [], -1}
+    raise "not implemented"
   end
 
   @impl :brod_group_member
@@ -434,7 +443,7 @@ defmodule BroadwayKafka.Producer do
 
       {:error, reason} ->
         raise "cannot fetch records from Kafka (topic=#{topic} partition=#{partition} " <>
-          "offset=#{offset}). Reason: #{inspect(reason)}"
+                "offset=#{offset}). Reason: #{inspect(reason)}"
     end
   end
 

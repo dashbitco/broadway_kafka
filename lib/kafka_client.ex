@@ -12,6 +12,8 @@ defmodule BroadwayKafka.KafkaClient do
            client_config: keyword
          }
 
+  @typep offset_reset_policy :: :earliest | :latest
+
   @callback init(opts :: any) :: {:ok, config} | {:error, any}
   @callback setup(
               stage_pid :: pid,
@@ -37,6 +39,15 @@ defmodule BroadwayKafka.KafkaClient do
               config :: any
             ) ::
               {:ok, {offset :: integer, [:brod.message()]}} | {:error, any()}
+
+  @callback resolve_offset(
+              hosts :: [:brod.endpoint()],
+              topic :: binary,
+              partition :: integer,
+              offset :: integer,
+              offset_reset_policy :: offset_reset_policy()
+            ) ::
+              offset :: integer | no_return()
 
   @callback connected?(:brod.client()) :: boolean
   @callback stop_group_coordinator(pid) :: :ok

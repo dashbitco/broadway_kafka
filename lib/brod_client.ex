@@ -21,7 +21,7 @@ defmodule BroadwayKafka.BrodClient do
   ]
 
   @supported_client_config_options [
-    :ssl,
+    :ssl
   ]
 
   @default_receive_interval 2000
@@ -30,6 +30,10 @@ defmodule BroadwayKafka.BrodClient do
   @default_reconnect_timeout 1000
 
   @default_offset_commit_on_ack true
+
+  @offset_reset_policy_values [:earliest, :latest]
+
+  @default_offset_reset_policy :latest
 
   @impl true
   def init(opts) do
@@ -42,6 +46,8 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :reconnect_timeout, default: @default_reconnect_timeout),
          {:ok, offset_commit_on_ack} <-
            validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
+         {:ok, offset_reset_policy} <-
+           validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -53,6 +59,7 @@ defmodule BroadwayKafka.BrodClient do
          receive_interval: receive_interval,
          reconnect_timeout: reconnect_timeout,
          offset_commit_on_ack: offset_commit_on_ack,
+         offset_reset_policy: offset_reset_policy,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
          client_config: client_config
@@ -114,6 +121,24 @@ defmodule BroadwayKafka.BrodClient do
     :ok
   end
 
+  @impl true
+  def resolve_offset(hosts, topic, partition, current_offset, offset_reset_policy) do
+    policy = offset_reset_policy_value(offset_reset_policy)
+
+    case :brod.resolve_offset(hosts, topic, partition, policy) do
+      {:ok, offset} ->
+        if current_offset == :undefined || current_offset > offset do
+          offset
+        else
+          current_offset
+        end
+
+      {:error, reason} ->
+        raise "cannot resolve begin offset (hosts=#{inspect(hosts)} topic=#{topic} " <>
+                "partition=#{partition}). Reason: #{inspect(reason)}"
+    end
+  end
+
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
     :brod_group_coordinator.start_link(
       client_id,
@@ -173,6 +198,15 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:offset_commit_on_ack, value) when not is_boolean(value),
     do: validation_error(:offset_commit_on_ack, "a boolean", value)
 
+  defp validate_option(:offset_reset_policy, value)
+       when value not in @offset_reset_policy_values do
+    validation_error(
+      :offset_reset_policy,
+      "any of #{inspect(@offset_reset_policy_values)}",
+      value
+    )
+  end
+
   defp validate_option(:offset_commit_interval_seconds, value)
        when not is_integer(value) or value < 1,
        do: validation_error(:offset_commit_interval_seconds, "a positive integer", value)
@@ -224,7 +258,7 @@ defmodule BroadwayKafka.BrodClient do
 
   defp validate_client_config(opts) do
     with {:ok, [_ | _] = config} <-
-            validate_supported_opts(opts, :client_config, @supported_client_config_options),
+           validate_supported_opts(opts, :client_config, @supported_client_config_options),
          {:ok, _} <- validate(config, :ssl) do
       {:ok, config}
     end
@@ -239,6 +273,16 @@ defmodule BroadwayKafka.BrodClient do
     |> case do
       [] -> {:ok, opts}
       keys -> {:error, "Unsupported options #{inspect(keys)} for #{inspect(group_name)}"}
+    end
+  end
+
+  defp offset_reset_policy_value(policy) do
+    case policy do
+      :earliest ->
+        -2
+
+      :latest ->
+        -1
     end
   end
 end

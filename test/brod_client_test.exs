@@ -94,6 +94,22 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{offset_commit_on_ack: false}} = BrodClient.init(opts)
     end
 
+    test ":offset_reset_policy can be :earliest or :latest. Default is :latest" do
+      assert {:ok, %{offset_reset_policy: :latest}} = BrodClient.init(@opts)
+
+      opts = Keyword.put(@opts, :offset_reset_policy, :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error,
+                "expected :offset_reset_policy to be any of [:earliest, :latest], got: :an_atom"}
+
+      opts = Keyword.put(@opts, :offset_reset_policy, :earliest)
+      assert {:ok, %{offset_reset_policy: :earliest}} = BrodClient.init(opts)
+
+      opts = Keyword.put(@opts, :offset_reset_policy, :latest)
+      assert {:ok, %{offset_reset_policy: :latest}} = BrodClient.init(opts)
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
