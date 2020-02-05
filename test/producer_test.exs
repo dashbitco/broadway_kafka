@@ -99,6 +99,11 @@ defmodule BroadwayKafka.ProducerTest do
     def stop_group_coordinator(_pid) do
       :ok
     end
+
+    @impl true
+    def resolve_offset(_hosts, _topic, _partition, offset, _offset_reset_policy) do
+      offset
+    end
   end
 
   defmodule Forwarder do
@@ -584,6 +589,7 @@ defmodule BroadwayKafka.ProducerTest do
             {BroadwayKafka.Producer,
              [
                client: FakeKafkaClient,
+               hosts: [],
                test_pid: self(),
                message_server: message_server,
                receive_interval: 0,

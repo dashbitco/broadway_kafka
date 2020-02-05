@@ -1,9 +1,10 @@
 %{
-  "broadway": {:git, "https://github.com/dashbitco/broadway.git", "08497708e10867935f2e92351e4cde9e4a57135e", []},
-  "brod": {:hex, :brod, "3.9.2", "00206e09bad7cc352b8697521edc9dff84895e3117863459b7622e04b03b4150", [:make, :rebar, :rebar3], [{:kafka_protocol, "2.3.1", [hex: :kafka_protocol, repo: "hexpm", optional: false]}, {:supervisor3, "1.1.8", [hex: :supervisor3, repo: "hexpm", optional: false]}], "hexpm"},
+  "broadway": {:git, "https://github.com/dashbitco/broadway.git", "36870c2ca213a901d769f280197f10ae8b9cf6a6", []},
+  "brod": {:hex, :brod, "3.9.5", "b311cdb78a359fdea8998ad98ceefb3bfedfdb513a272993e2d150bc6a58108a", [:make, :rebar, :rebar3], [{:kafka_protocol, "2.3.3", [hex: :kafka_protocol, repo: "hexpm", optional: false]}, {:supervisor3, "1.1.8", [hex: :supervisor3, repo: "hexpm", optional: false]}], "hexpm"},
   "crc32cer": {:hex, :crc32cer, "0.1.3", "8984906c4b4fae6aa292c48f286a1c83b19ad44bd102287acb94d696015967ce", [:make, :rebar, :rebar3], [], "hexpm"},
-  "gen_stage": {:hex, :gen_stage, "0.14.3", "d0c66f1c87faa301c1a85a809a3ee9097a4264b2edf7644bf5c123237ef732bf", [:mix], [], "hexpm"},
-  "kafka_protocol": {:hex, :kafka_protocol, "2.3.1", "5a9afdf022db64f0dc4f1b611bff44c2f71b16782524e544e3f96f9ce08bd82d", [:rebar, :rebar3], [{:crc32cer, "0.1.3", [hex: :crc32cer, repo: "hexpm", optional: false]}, {:snappyer, "1.2.4", [hex: :snappyer, repo: "hexpm", optional: false]}], "hexpm"},
+  "gen_stage": {:hex, :gen_stage, "1.0.0", "51c8ae56ff54f9a2a604ca583798c210ad245f415115453b773b621c49776df5", [:mix], [], "hexpm"},
+  "kafka_protocol": {:hex, :kafka_protocol, "2.3.3", "a43eaf1768a1a0300e81c356f543f9e6c02576c5a6a3301a1e5eea7eeede7435", [:rebar, :rebar3], [{:crc32cer, "0.1.3", [hex: :crc32cer, repo: "hexpm", optional: false]}, {:snappyer, "1.2.4", [hex: :snappyer, repo: "hexpm", optional: false]}], "hexpm"},
   "snappyer": {:hex, :snappyer, "1.2.4", "6d739c534cd2339633127a2b40279be71f149e5842c5363a4d88e66efb7c1fec", [:make, :rebar, :rebar3], [], "hexpm"},
   "supervisor3": {:hex, :supervisor3, "1.1.8", "5cf95c95342b589ec8d74689eea0646c0a3eb92820241e0c2d0ca4c104df92bc", [:make, :rebar, :rebar3], [], "hexpm"},
+  "telemetry": {:hex, :telemetry, "0.4.1", "ae2718484892448a24470e6aa341bc847c3277bfb8d4e9289f7474d752c09c7f", [:rebar3], [], "hexpm"},
 }
