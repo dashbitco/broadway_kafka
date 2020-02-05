@@ -202,7 +202,7 @@ defmodule BroadwayKafka.BrodClient do
        when value not in @offset_reset_policy_values do
     validation_error(
       :offset_reset_policy,
-      "any of #{inspect(@offset_reset_policy_values)}",
+      "one of #{inspect(@offset_reset_policy_values)}",
       value
     )
   end
