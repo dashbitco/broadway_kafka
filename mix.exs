@@ -21,7 +21,7 @@ defmodule BroadwayKafka.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:broadway, git: "https://github.com/dashbitco/broadway.git"},
+      {:broadway, "~> 0.6.0-rc"},
       {:brod, "~> 3.9.2"}
     ]
   end
