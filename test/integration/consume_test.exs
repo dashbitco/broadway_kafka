@@ -118,7 +118,7 @@ defmodule BroadwayKafka.ConsumerTest do
     # Let's wait for the assignments before start sending messages
     wait_for_assignments(broadway_pid)
 
-    IO.puts "Sending messages..."
+    IO.puts("Sending messages...")
     send_messages(Config.n_messages(), hosts, topic)
 
     [last_message_2, last_message_0, last_message_1] = Config.last_messages()
@@ -174,8 +174,18 @@ defmodule BroadwayKafka.ConsumerTest do
   defp reset_topic(topic) do
     cmd_opts = [into: IO.stream(:stdio, :line), stderr_to_stdout: true]
     delete_args = ["--delete", "--zookeeper", "localhost:2181", "--topic", topic]
-    create_args = ["--create", "--zookeeper", "localhost:2181", "--replication-factor", "1",
-                   "--partitions", "3", "--topic", topic]
+
+    create_args = [
+      "--create",
+      "--zookeeper",
+      "localhost:2181",
+      "--replication-factor",
+      "1",
+      "--partitions",
+      "3",
+      "--topic",
+      topic
+    ]
 
     System.cmd("kafka-topics", delete_args, cmd_opts)
     System.cmd("kafka-topics", create_args, cmd_opts)
