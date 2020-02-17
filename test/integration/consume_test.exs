@@ -115,9 +115,10 @@ defmodule BroadwayKafka.ConsumerTest do
 
     {broadway_pid, messages_agent} = start_broadway()
 
-    # Let's wait a bit to make sure broadway has started
-    Process.sleep(3000)
+    # Let's wait for the assignments before start sending messages
+    wait_for_assignments(broadway_pid)
 
+    IO.puts "Sending messages..."
     send_messages(Config.n_messages(), hosts, topic)
 
     [last_message_2, last_message_0, last_message_1] = Config.last_messages()
@@ -137,7 +138,7 @@ defmodule BroadwayKafka.ConsumerTest do
         IO.puts("Got last message from partition 1")
     end
 
-    # Let's wait to see if we get more messages
+    # Let's wait a bit to see if we get more messages
     Process.sleep(1000)
 
     messages = Agent.get(messages_agent, & &1)
@@ -171,13 +172,13 @@ defmodule BroadwayKafka.ConsumerTest do
   end
 
   defp reset_topic(topic) do
-    :os.cmd('kafka-topics --delete --zookeeper localhost:2181 --topic #{topic}')
+    cmd_opts = [into: IO.stream(:stdio, :line), stderr_to_stdout: true]
+    delete_args = ["--delete", "--zookeeper", "localhost:2181", "--topic", topic]
+    create_args = ["--create", "--zookeeper", "localhost:2181", "--replication-factor", "1",
+                   "--partitions", "3", "--topic", topic]
 
-    :os.cmd(
-      'kafka-topics --create --zookeeper localhost:2181 --replication-factor 1 --partitions 3 --topic #{
-        topic
-      }'
-    )
+    System.cmd("kafka-topics", delete_args, cmd_opts)
+    System.cmd("kafka-topics", create_args, cmd_opts)
   end
 
   defp send_messages(n_messages, hosts, topic) do
@@ -238,5 +239,23 @@ defmodule BroadwayKafka.ConsumerTest do
       end)
 
     Enum.reverse(ordering_problems)
+  end
+
+  defp wait_for_assignments(broadway_pid) do
+    producers =
+      broadway_pid
+      |> Broadway.producer_names()
+      |> Enum.map(fn producer ->
+        pid = Process.whereis(producer)
+        :erlang.trace(pid, true, [:receive, tracer: self()])
+        pid
+      end)
+
+    Enum.each(producers, fn pid ->
+      receive do
+        {:trace, ^pid, :receive, {:put_assignments, _, _}} ->
+          IO.puts("Assignment received. Producer: #{inspect(pid)}")
+      end
+    end)
   end
 end

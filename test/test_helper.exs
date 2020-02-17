@@ -1,2 +1,1 @@
-ExUnit.start()
-ExUnit.configure(exclude: [:integration])
+ExUnit.start(exclude: [:integration])
