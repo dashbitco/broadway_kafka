@@ -117,6 +117,15 @@ defmodule BroadwayKafka.Producer do
   receive more assignments than planned. For instance, if another consumer crashes, the server
   will reassign all its topic/partition to other available consumers, including any Broadway
   producer subscribed to the same topic.
+
+  ## Handling failed messages
+
+  `broadway_kafka` never stops the flow of the stream, i.e. it will **always ack** the messages
+  even when they fail. Unlike queue-based connectors, where you can mark a single message as failed.
+  In Kafka that's not possible due to its single offset per topic/partition ack strategy. If you
+  want to reprocess failed messages, you need to roll your own strategy. A possible way to do that
+  is to implement `c:Broadway.handle_failed/2` and send failed messages to a separated stream or queue for
+  later processing.
   """
 
   use GenStage
