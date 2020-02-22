@@ -223,6 +223,8 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_bytes, "a positive integer", value)
 
+  defp validate_option(:ssl, value) when is_boolean(value), do: {:ok, value}
+
   defp validate_option(:ssl, value) do
     if Keyword.keyword?(value) do
       {:ok, value}
