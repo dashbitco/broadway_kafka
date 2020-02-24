@@ -75,6 +75,10 @@ defmodule BroadwayKafka.Producer do
 
   The available options that will be internally passed to `:brod.start_client/3`.
 
+    * `:sasl` - Optional. A a tuple of mechanism which can be `:plain`, `:scram_sha_256` or `:scram_sha_512`, username and password. See the `:brod`'s
+    [`Authentication Support`](https://github.com/klarna/brod#authentication-support) documentation
+    for more information. Default is no sasl options.
+
     * `:ssl` - Optional. A list of options to use when connecting via SSL/TLS. See the
     [`tls_client_option`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) documentation
     for more information. Default is no ssl options.

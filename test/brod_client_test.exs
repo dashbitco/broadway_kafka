@@ -169,6 +169,29 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_bytes] == 3
     end
 
+    test ":sasl is an optional tuple of SASL mechanism, username and password" do
+      opts = put_in(@opts, [:client_config, :sasl], :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error,
+                "expected :sasl to be a tuple of SASL mechanism, username and password, got: :an_atom"}
+
+      opts = put_in(@opts, [:client_config, :sasl], {:an_atom, "username", "password"})
+
+      assert BrodClient.init(opts) ==
+               {:error,
+                "expected :sasl to be a tuple of SASL mechanism, username and password, got: {:an_atom, \"username\", \"password\"}"}
+
+      opts = put_in(@opts, [:client_config, :sasl], {:plain, "username", "password"})
+
+      assert {:ok,
+              %{
+                client_config: [
+                  sasl: {:plain, "username", "password"}
+                ]
+              }} = BrodClient.init(opts)
+    end
+
     test ":ssl is an optional keyword list" do
       opts = put_in(@opts, [:client_config, :ssl], :an_atom)
 
