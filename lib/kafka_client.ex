@@ -41,11 +41,11 @@ defmodule BroadwayKafka.KafkaClient do
               {:ok, {offset :: integer, [:brod.message()]}} | {:error, any()}
 
   @callback resolve_offset(
-              hosts :: [:brod.endpoint()],
               topic :: binary,
               partition :: integer,
               offset :: integer,
-              offset_reset_policy :: offset_reset_policy()
+              offset_reset_policy :: offset_reset_policy(),
+              config
             ) ::
               offset :: integer | no_return()
 
