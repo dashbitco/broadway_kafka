@@ -75,7 +75,7 @@ defmodule BroadwayKafka.Producer do
 
   The available options that will be internally passed to `:brod.start_client/3`.
 
-    * `:ssl` - Optional. A list of options to use when connecting via SSL/TLS. See the
+    * `:ssl` - Optional. A boolean or a list of options to use when connecting via SSL/TLS. See the
     [`tls_client_option`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) documentation
     for more information. Default is no ssl options.
 
