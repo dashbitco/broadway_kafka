@@ -21,7 +21,8 @@ defmodule BroadwayKafka.BrodClient do
   ]
 
   @supported_client_config_options [
-    :ssl
+    :ssl,
+    :sasl
   ]
 
   @default_receive_interval 2000
@@ -223,6 +224,17 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_bytes, "a positive integer", value)
 
+  defp validate_option(:sasl, value) do
+    with {mechanism, username, password}
+         when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
+                is_binary(username) and
+                is_binary(password) <- value do
+      {:ok, value}
+    else
+      _value -> validation_error(:sasl, "a tuple of SASL mechanism, username and password", value)
+    end
+  end
+
   defp validate_option(:ssl, value) when is_boolean(value), do: {:ok, value}
 
   defp validate_option(:ssl, value) do
@@ -261,6 +273,7 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_client_config(opts) do
     with {:ok, [_ | _] = config} <-
            validate_supported_opts(opts, :client_config, @supported_client_config_options),
+         {:ok, _} <- validate(config, :sasl),
          {:ok, _} <- validate(config, :ssl) do
       {:ok, config}
     end
