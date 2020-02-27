@@ -192,7 +192,7 @@ defmodule BroadwayKafka.BrodClientTest do
               }} = BrodClient.init(opts)
     end
 
-    test ":ssl is an optional keyword list" do
+    test ":ssl is an optional boolean or keyword list" do
       opts = put_in(@opts, [:client_config, :ssl], :an_atom)
 
       assert BrodClient.init(opts) ==
@@ -211,6 +211,13 @@ defmodule BroadwayKafka.BrodClientTest do
                 client_config: [
                   ssl: [cacertfile: "ca.crt", keyfile: "client.key", certfile: "client.crt"]
                 ]
+              }} = BrodClient.init(opts)
+
+      opts = put_in(@opts, [:client_config, :ssl], true)
+
+      assert {:ok,
+              %{
+                client_config: [ssl: true]
               }} = BrodClient.init(opts)
     end
   end

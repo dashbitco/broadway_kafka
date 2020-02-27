@@ -123,10 +123,10 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   @impl true
-  def resolve_offset(hosts, topic, partition, current_offset, offset_reset_policy) do
+  def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
     policy = offset_reset_policy_value(offset_reset_policy)
 
-    case :brod.resolve_offset(hosts, topic, partition, policy) do
+    case :brod.resolve_offset(config.hosts, topic, partition, policy, config.client_config) do
       {:ok, offset} ->
         if current_offset == :undefined || current_offset > offset do
           offset
@@ -135,7 +135,7 @@ defmodule BroadwayKafka.BrodClient do
         end
 
       {:error, reason} ->
-        raise "cannot resolve begin offset (hosts=#{inspect(hosts)} topic=#{topic} " <>
+        raise "cannot resolve begin offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
                 "partition=#{partition}). Reason: #{inspect(reason)}"
     end
   end
@@ -234,6 +234,8 @@ defmodule BroadwayKafka.BrodClient do
       _value -> validation_error(:sasl, "a tuple of SASL mechanism, username and password", value)
     end
   end
+
+  defp validate_option(:ssl, value) when is_boolean(value), do: {:ok, value}
 
   defp validate_option(:ssl, value) do
     if Keyword.keyword?(value) do
