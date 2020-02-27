@@ -254,11 +254,16 @@ defmodule BroadwayKafka.Producer do
           begin_offset: begin_offset
         ) = assignment
 
-        hosts = state.config.hosts
         offset_reset_policy = state.config[:offset_reset_policy]
 
         offset =
-          state.client.resolve_offset(hosts, topic, partition, begin_offset, offset_reset_policy)
+          state.client.resolve_offset(
+            topic,
+            partition,
+            begin_offset,
+            offset_reset_policy,
+            state.config
+          )
 
         {group_generation_id, topic, partition, offset}
       end)

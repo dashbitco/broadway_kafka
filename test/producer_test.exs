@@ -101,7 +101,7 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def resolve_offset(_hosts, _topic, _partition, offset, _offset_reset_policy) do
+    def resolve_offset(_topic, _partition, offset, _offset_reset_policy, _config) do
       offset
     end
   end
