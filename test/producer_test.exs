@@ -67,7 +67,13 @@ defmodule BroadwayKafka.ProducerTest do
 
       kafka_messages =
         for {msg, i} <- Enum.with_index(messages, offset) do
-          kafka_message(value: msg, offset: i, key: "", ts: nil)
+          kafka_message(
+            value: msg,
+            offset: i,
+            key: :fake_key,
+            ts: :fake_ts,
+            headers: :fake_headers
+          )
         end
 
       {:ok, {offset + length(kafka_messages), kafka_messages}}
@@ -117,6 +123,7 @@ defmodule BroadwayKafka.ProducerTest do
         topic: meta.topic,
         partition: meta.partition,
         offset: meta.offset,
+        meta: meta,
         pid: self()
       }
 
@@ -188,6 +195,28 @@ defmodule BroadwayKafka.ProducerTest do
     assert message ==
              "cannot set option :partition_by for batchers :default. " <>
                "The option will be set automatically by BroadwayKafka.Producer"
+  end
+
+  test "append kafka metadata to message" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+
+    producer = get_producer(pid)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+    MessageServer.push_messages(message_server, 1..1, topic: "topic", partition: 0)
+
+    assert_receive {:message_handled, %{data: 1, meta: meta}}
+
+    assert meta == %{
+             topic: "topic",
+             partition: 0,
+             offset: 1,
+             key: :fake_key,
+             ts: :fake_ts,
+             headers: :fake_headers
+           }
+
+    stop_broadway(pid)
   end
 
   test "single producer receiving messages from a single topic/partition" do
