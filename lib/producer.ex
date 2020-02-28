@@ -466,14 +466,21 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp wrap_message(kafka_msg, topic, partition, generation_id) do
-    kafka_message(value: data, offset: offset, key: key, ts: ts) = kafka_msg
+    kafka_message(value: data, offset: offset, key: key, ts: ts, headers: headers) = kafka_msg
 
     ack_data = %{offset: offset}
     ack_ref = {self(), {generation_id, topic, partition}}
 
     message = %Message{
       data: data,
-      metadata: %{topic: topic, partition: partition, offset: offset, key: key, ts: ts},
+      metadata: %{
+        topic: topic,
+        partition: partition,
+        offset: offset,
+        key: key,
+        ts: ts,
+        headers: headers
+      },
       acknowledger: {Acknowledger, ack_ref, ack_data}
     }
 
