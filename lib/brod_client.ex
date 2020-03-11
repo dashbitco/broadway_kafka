@@ -172,7 +172,7 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   defp validate_option(:hosts, value) do
-    if Keyword.keyword?(value) do
+    if supported_hosts?(value) do
       {:ok, value}
     else
       validation_error(:hosts, "a keyword list of host/port pairs", value)
@@ -300,4 +300,10 @@ defmodule BroadwayKafka.BrodClient do
         -1
     end
   end
+
+  defp supported_hosts?([{key, _value} | rest]) when is_binary(key) or is_atom(key),
+    do: supported_hosts?(rest)
+
+  defp supported_hosts?([]), do: true
+  defp supported_hosts?(_other), do: false
 end
