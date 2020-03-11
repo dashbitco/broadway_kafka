@@ -24,6 +24,9 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = Keyword.put(@opts, :hosts, host: 9092)
       assert {:ok, %{hosts: [host: 9092]}} = BrodClient.init(opts)
+
+      opts = Keyword.put(@opts, :hosts, [{"host", 9092}])
+      assert {:ok, %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
     end
 
     test ":group_id is a required string" do
