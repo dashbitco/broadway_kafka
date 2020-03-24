@@ -9,11 +9,21 @@ defmodule BroadwayKafka.Producer do
 
   ## Options
 
-    * `:hosts` - Required. A keyword list of host/port pairs to use for establishing the
-       initial connection to Kafka, e.g. [localhost: 9092].
+    * `:hosts` - Required. A list of host and port tuples or a single string of comma
+      separated HOST:PORT pairs to use for establishing the initial connection to Kafka,
+      e.g. [localhost: 9092]. Examples:
 
-    * `:group_id` - Required. A unique string that identifies the consumer group the
-       producer will belong to.
+        # Keyword
+        [kafka-vm1: 9092, kafka-vm2: 9092, kafka-vm3: 9092]
+
+        # List of tuples
+        [{"kafka-vm1", 9092}, {"kafka-vm2", 9092}, {"kafka-vm3", 9092}]
+
+        # Single `String.t`
+        "kafka-vm1:9092,kafka-vm2:9092,kafka-vm3:9092"
+
+    * `:group_id` - Required. A unique string that identifies the consumer group the producer
+      will belong to.
 
     * `:topics` - Required. A list of topics or a keyword list of topic/partition that
       the producer will subscribe to.

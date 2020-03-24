@@ -54,7 +54,7 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, client_config} <- validate_client_config(opts) do
       {:ok,
        %{
-         hosts: hosts,
+         hosts: parse_hosts(hosts),
          group_id: group_id,
          topics: topics,
          receive_interval: receive_interval,
@@ -175,7 +175,11 @@ defmodule BroadwayKafka.BrodClient do
     if supported_hosts?(value) do
       {:ok, value}
     else
-      validation_error(:hosts, "a keyword list of host/port pairs", value)
+      validation_error(
+        :hosts,
+        "a list of host/port pairs or a single string of comma separated HOST:PORT pairs",
+        value
+      )
     end
   end
 
@@ -301,9 +305,24 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
+  defp supported_hosts?(hosts_single_binary) when is_binary(hosts_single_binary) do
+    String.match?(hosts_single_binary, ~r/^(.+:[\d]+)(,.+:[\d]+)?$/)
+  end
+
   defp supported_hosts?([{key, _value} | rest]) when is_binary(key) or is_atom(key),
     do: supported_hosts?(rest)
 
   defp supported_hosts?([]), do: true
   defp supported_hosts?(_other), do: false
+
+  defp parse_hosts(hosts_single_binary) when is_binary(hosts_single_binary) do
+    hosts_single_binary
+    |> String.split(",")
+    |> Enum.map(fn host_port ->
+      [host, port] = String.split(host_port, ":")
+      {host, String.to_integer(port)}
+    end)
+  end
+
+  defp parse_hosts(hosts), do: hosts
 end

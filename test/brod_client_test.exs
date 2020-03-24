@@ -13,20 +13,36 @@ defmodule BroadwayKafka.BrodClientTest do
   ]
 
   describe "validate init options" do
-    test ":hosts is a required keyword list" do
+    test ":hosts is a required value" do
       opts = Keyword.delete(@opts, :hosts)
       assert BrodClient.init(opts) == {:error, ":hosts is required"}
+    end
+
+    test ":hosts is valid as a keyword list or a list of tuples or a single binary" do
+      expected_msg =
+        "expected :hosts to be a list of host/port pairs or a single " <>
+          "string of comma separated HOST:PORT pairs, got: "
 
       opts = Keyword.put(@opts, :hosts, :an_atom)
+      assert BrodClient.init(opts) == {:error, expected_msg <> ":an_atom"}
 
-      assert BrodClient.init(opts) ==
-               {:error, "expected :hosts to be a keyword list of host/port pairs, got: :an_atom"}
+      opts = Keyword.put(@opts, :hosts, "host")
+      assert BrodClient.init(opts) == {:error, expected_msg <> ~s/"host"/}
+
+      opts = Keyword.put(@opts, :hosts, "host:9092,")
+      assert BrodClient.init(opts) == {:error, expected_msg <> ~s/"host:9092,"/}
 
       opts = Keyword.put(@opts, :hosts, host: 9092)
       assert {:ok, %{hosts: [host: 9092]}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :hosts, [{"host", 9092}])
       assert {:ok, %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
+
+      opts = Keyword.put(@opts, :hosts, "host:9092")
+      assert {:ok, %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
+
+      opts = Keyword.put(@opts, :hosts, "host1:9092,host2:9092")
+      assert {:ok, %{hosts: [{"host1", 9092}, {"host2", 9092}]}} = BrodClient.init(opts)
     end
 
     test ":group_id is a required string" do
