@@ -25,8 +25,7 @@ defmodule BroadwayKafka.Producer do
     * `:group_id` - Required. A unique string that identifies the consumer group the producer
       will belong to.
 
-    * `:topics` - Required. A list of topics or a keyword list of topic/partition that
-      the producer will subscribe to.
+    * `:topics` - Required. A list of topics that the producer will subscribe to.
 
     * `:receive_interval` - Optional. The duration (in milliseconds) for which the producer
       waits before making a request for more messages. Default is 2000 (2 seconds).
