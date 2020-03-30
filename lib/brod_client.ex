@@ -187,10 +187,10 @@ defmodule BroadwayKafka.BrodClient do
     do: validation_error(:group_id, "a non empty string", value)
 
   defp validate_option(:topics, value) do
-    if is_list(value) && (Enum.all?(value, &is_binary/1) || Keyword.keyword?(value)) do
+    if is_list(value) && Enum.all?(value, &is_binary/1) do
       {:ok, value}
     else
-      validation_error(:topics, "a list of strings or a keyword list of host/port pairs", value)
+      validation_error(:topics, "a list of strings", value)
     end
   end
 

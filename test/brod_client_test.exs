@@ -58,22 +58,17 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, %{group_id: "my_group"}} = BrodClient.init(opts)
     end
 
-    test ":topics is a required list of strings or keyword list" do
+    test ":topics is a required list of strings" do
       opts = Keyword.delete(@opts, :topics)
       assert BrodClient.init(opts) == {:error, ":topics is required"}
 
       opts = Keyword.put(@opts, :topics, :an_atom)
 
       assert BrodClient.init(opts) ==
-               {:error,
-                "expected :topics to be a list of strings or a keyword " <>
-                  "list of host/port pairs, got: :an_atom"}
+               {:error, "expected :topics to be a list of strings, got: :an_atom"}
 
       opts = Keyword.put(@opts, :topics, ["topic_1", "topic_2"])
       assert {:ok, %{topics: ["topic_1", "topic_2"]}} = BrodClient.init(opts)
-
-      opts = Keyword.put(@opts, :topics, topic_1: 1, topic_2: 2)
-      assert {:ok, %{topics: [topic_1: 1, topic_2: 2]}} = BrodClient.init(opts)
     end
 
     test ":receive_interval is a non-negative integer with default value 2000" do
