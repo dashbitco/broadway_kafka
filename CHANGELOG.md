@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.1.2 (2020-04-02)
+
+  * Add support for single string hosts configuration
+  * Add support for tuple lists with string as key in hosts
+  * Drop invalid support of topic/partition for topics option
+
 ## v0.1.1 (2020-02-28)
 
   * Add SASL authentication support
