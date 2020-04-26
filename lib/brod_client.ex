@@ -124,19 +124,19 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
-    policy = offset_reset_policy_value(offset_reset_policy)
+    if current_offset == :undefined do
+      policy = offset_reset_policy_value(offset_reset_policy)
 
-    case :brod.resolve_offset(config.hosts, topic, partition, policy, config.client_config) do
-      {:ok, offset} ->
-        if current_offset == :undefined || current_offset > offset do
+      case :brod.resolve_offset(config.hosts, topic, partition, policy, config.client_config) do
+        {:ok, offset} ->
           offset
-        else
-          current_offset
-        end
 
-      {:error, reason} ->
-        raise "cannot resolve begin offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
-                "partition=#{partition}). Reason: #{inspect(reason)}"
+        {:error, reason} ->
+          raise "cannot resolve begin offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
+                  "partition=#{partition}). Reason: #{inspect(reason)}"
+      end
+    else
+      current_offset
     end
   end
 
