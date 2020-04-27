@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.3 (2020-04-27)
+
+  * Fix resetting offset on every assignment
+
 ## v0.1.2 (2020-04-02)
 
   * Add support for single string hosts configuration
