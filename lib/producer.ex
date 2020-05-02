@@ -92,6 +92,9 @@ defmodule BroadwayKafka.Producer do
     [`tls_client_option`](http://erlang.org/doc/man/ssl.html#type-tls_client_option) documentation
     for more information. Default is no ssl options.
 
+    * `:connect_timeout` - Optional. Time in milliseconds to be used as a timeout for `:brod`'s communication with Kafka.
+    Default is to use `:brod`'s default timeout which is currently 5 seconds.
+
   > **Note**: Currently, Broadway does not support all options provided by `:brod`. If you
   have a scenario where you need any extra option that is not listed above, please open an
   issue, so we can consider adding it.
