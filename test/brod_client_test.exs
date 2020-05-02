@@ -234,5 +234,21 @@ defmodule BroadwayKafka.BrodClientTest do
                 client_config: [ssl: true]
               }} = BrodClient.init(opts)
     end
+
+    test ":connect_timeout is an optional positive integer" do
+      opts = put_in(@opts, [:client_config, :connect_timeout], "5000")
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :connect_timeout to be a positive integer, got: \"5000\""}
+
+      opts = put_in(@opts, [:client_config, :connect_timeout], 5000)
+
+      assert {:ok,
+              %{
+                client_config: [
+                  connect_timeout: 5000
+                ]
+              }} = BrodClient.init(opts)
+    end
   end
 end

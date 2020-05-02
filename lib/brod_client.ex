@@ -22,7 +22,8 @@ defmodule BroadwayKafka.BrodClient do
 
   @supported_client_config_options [
     :ssl,
-    :sasl
+    :sasl,
+    :connect_timeout
   ]
 
   @default_receive_interval 2000
@@ -249,6 +250,9 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
+  defp validate_option(:connect_timeout, value) when not is_integer(value) or value < 1,
+    do: validation_error(:connect_timeout, "a positive integer", value)
+
   defp validate_option(_, value), do: {:ok, value}
 
   defp validation_error(option, expected, value) do
@@ -278,7 +282,8 @@ defmodule BroadwayKafka.BrodClient do
     with {:ok, [_ | _] = config} <-
            validate_supported_opts(opts, :client_config, @supported_client_config_options),
          {:ok, _} <- validate(config, :sasl),
-         {:ok, _} <- validate(config, :ssl) do
+         {:ok, _} <- validate(config, :ssl),
+         {:ok, _} <- validate(config, :connect_timeout) do
       {:ok, config}
     end
   end
