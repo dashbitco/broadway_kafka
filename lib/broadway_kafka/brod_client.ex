@@ -52,6 +52,7 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
          {:ok, offset_reset_policy} <-
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
+         {:ok, callback_module} <- validate(opts, :callback_module),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -64,6 +65,7 @@ defmodule BroadwayKafka.BrodClient do
          reconnect_timeout: reconnect_timeout,
          offset_commit_on_ack: offset_commit_on_ack,
          offset_reset_policy: offset_reset_policy,
+         callback_module: callback_module,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
          client_config: client_config
@@ -218,6 +220,18 @@ defmodule BroadwayKafka.BrodClient do
       "one of #{inspect(@offset_reset_policy_values)}",
       value
     )
+  end
+
+  defp validate_option(:callback_module, value) do
+    unless is_atom(value) and function_exported?(value, :on_drain, 1) do
+      validation_error(
+        :callback_module,
+        "module containing on_drain/1 function",
+        value
+      )
+    else
+      {:ok, value}
+    end
   end
 
   defp validate_option(:offset_commit_interval_seconds, value)
