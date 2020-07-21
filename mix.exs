@@ -27,7 +27,7 @@ defmodule BroadwayKafka.MixProject do
   defp deps do
     [
       {:broadway, "~> 0.6.0"},
-      {:brod, "~> 3.9.2"},
+      {:brod, "~> 3.14.0"},
       {:ex_doc, ">= 0.19.0", only: :docs}
     ]
   end
