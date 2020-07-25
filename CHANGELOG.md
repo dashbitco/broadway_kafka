@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.4 (2020-07-25)
+
+  * Relax Brod dependency
+
 ## v0.1.3 (2020-04-27)
 
   * Fix resetting offset on every assignment
