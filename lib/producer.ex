@@ -13,14 +13,14 @@ defmodule BroadwayKafka.Producer do
       separated HOST:PORT pairs to use for establishing the initial connection to Kafka,
       e.g. [localhost: 9092]. Examples:
 
-        # Keyword
-        [kafka-vm1: 9092, kafka-vm2: 9092, kafka-vm3: 9092]
+          # Keyword
+          [kafka-vm1: 9092, kafka-vm2: 9092, kafka-vm3: 9092]
 
-        # List of tuples
-        [{"kafka-vm1", 9092}, {"kafka-vm2", 9092}, {"kafka-vm3", 9092}]
+          # List of tuples
+          [{"kafka-vm1", 9092}, {"kafka-vm2", 9092}, {"kafka-vm3", 9092}]
 
-        # Single `String.t`
-        "kafka-vm1:9092,kafka-vm2:9092,kafka-vm3:9092"
+          # Single `String.t`
+          "kafka-vm1:9092,kafka-vm2:9092,kafka-vm3:9092"
 
     * `:group_id` - Required. A unique string that identifies the consumer group the producer
       will belong to.
