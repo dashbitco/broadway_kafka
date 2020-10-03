@@ -44,14 +44,14 @@ defmodule BroadwayKafka.Producer do
       `:latest`. Default is `:latest`.
 
     * `:group_config` - Optional. A list of options used to configure the group
-      coordinator. See the "Group config options" section below for a list of all available
+      coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
       options.
 
     * `:fetch_config` - Optional. A list of options used when fetching messages. See the
-      "Fetch config options" section below for a list of all available options.
+      ["Fetch config options"](#module-fetch-config-options) section below for a list of all available options.
 
     * `:client_config` - Optional. A list of options used when creating the client. See the
-      "Client config options" section below for a list of all available options.
+      ["Client config options"](#module-client-config-options) section below for a list of all available options.
 
   ## Group config options
 
