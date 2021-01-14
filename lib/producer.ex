@@ -412,22 +412,18 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def assignments_revoked(producer_name) when is_atom(producer_name) do
-    # If the producer_pid is no longer alive, it means the revoke
-    # is happening due to a shutdown, so ignore it.
-    producer_pid = Process.whereis(producer_name)
-
-    if !is_nil(producer_pid) and Process.alive?(producer_pid) do
-      GenStage.call(producer_name, :drain_after_revoke, :infinity)
+    if producer_pid = Process.whereis(producer_name) do
+      assignments_revoked(producer_pid)
     end
 
     :ok
   end
 
   @impl :brod_group_member
-  def assignments_revoked(producer_pid) do
+  def assignments_revoked(producer_pid) when is_pid(producer_pid) do
     # If the producer_pid is no longer alive, it means the revoke
     # is happening due to a shutdown, so ignore it.
-    if !is_nil(producer_pid) and Process.alive?(producer_pid) do
+    if Process.alive?(producer_pid) do
       GenStage.call(producer_pid, :drain_after_revoke, :infinity)
     end
 
