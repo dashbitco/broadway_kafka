@@ -412,12 +412,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def assignments_revoked(producer_pid) do
-    try do
-      GenStage.call(producer_pid, :drain_after_revoke, :infinity)
-    catch
-      :exit, {:noproc, _} -> :ok
-    end
-
+    GenStage.call(producer_pid, :drain_after_revoke, :infinity)
     :ok
   end
 
