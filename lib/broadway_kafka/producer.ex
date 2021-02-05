@@ -185,6 +185,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def init(opts) do
+    Process.flag(:trap_exit, true)
     client = opts[:client] || BroadwayKafka.BrodClient
 
     case client.init(opts) do

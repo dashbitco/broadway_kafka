@@ -118,7 +118,7 @@ defmodule BroadwayKafka.BrodClient do
 
   def stop_group_coordinator(group_coordinator) do
     ref = Process.monitor(group_coordinator)
-    Process.exit(group_coordinator, :kill)
+    Process.exit(group_coordinator, :normal)
 
     receive do
       {:DOWN, ^ref, _, _, _} -> :ok
