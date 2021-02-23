@@ -310,7 +310,7 @@ defmodule BroadwayKafka.Producer do
         client.ack(group_coordinator, generation_id, topic, partition, new_offset, config)
       catch
         kind, reason ->
-          Logger.error(Exception.format(kind, reason, System.stacktrace()))
+          Logger.error(Exception.format(kind, reason, __STACKTRACE__))
       end
     end
 
