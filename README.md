@@ -1,5 +1,7 @@
 # BroadwayKafka
 
+[![Build Status](https://github.com/dashbitco/broadway_kafka/workflows/CI/badge.svg)](https://github.com/dahsbitco/broadway_kafka/actions)
+
 A Kafka connector for [Broadway](https://github.com/dashbitco/broadway).
 
 Documentation can be found at [https://hexdocs.pm/broadway_kafka](https://hexdocs.pm/broadway_kafka).
