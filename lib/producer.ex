@@ -109,7 +109,7 @@ defmodule BroadwayKafka.Producer do
             group_id: "group_1",
             topics: ["test"],
           ]},
-          concurrency: 10
+          concurrency: 1
         ],
         processors: [
           default: [
