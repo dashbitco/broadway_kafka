@@ -110,6 +110,11 @@ defmodule BroadwayKafka.ProducerTest do
     def resolve_offset(_topic, _partition, offset, _offset_reset_policy, _config) do
       offset
     end
+
+    @impl true
+    def update_topics(_client_id, _topics) do
+      :ok
+    end
   end
 
   defmodule Forwarder do

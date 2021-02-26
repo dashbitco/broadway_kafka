@@ -232,6 +232,13 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
+  def handle_cast({:update_topics, topics}, state) do
+    state.client.update_topics(state.group_coordinator, topics)
+
+    {:noreply, [], state}
+  end
+
+  @impl GenStage
   def handle_info({:poll, key}, %{acks: acks, demand: demand} = state) do
     # We only poll if:
     #
