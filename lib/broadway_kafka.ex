@@ -1,6 +1,8 @@
 defmodule BroadwayKafka do
   @moduledoc """
-  API for BroadwayKafka
+  Helpers for BroadwayKafka
+
+  For the producer, view `BroadwayKafka.Producer`
   """
 
   @doc """
@@ -10,11 +12,11 @@ defmodule BroadwayKafka do
 
   ## Examples
 
-    BroadwayKafka.update_topics(MyBroadway, ["topic_a", "topic_b"])
-    :ok
+      BroadwayKafka.update_topics(MyBroadway, ["topic_a", "topic_b"])
+      :ok
 
-    BroadwayKafka.update_topics(MyBroadway, [])
-    :ok
+      BroadwayKafka.update_topics(MyBroadway, [])
+      :ok
   """
   def update_topics(name, topics) do
     each_producer(name, &GenServer.cast(&1, {:update_topics, topics}))
