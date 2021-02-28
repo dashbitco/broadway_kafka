@@ -5,6 +5,16 @@ defmodule BroadwayKafka do
 
   @doc """
   Changes topics from a running BroadwayKafka instance
+
+  Updates topics in all producers, one after another
+
+  ## Examples
+
+    BroadwayKafka.update_topics(MyBroadway, ["topic_a", "topic_b"])
+    :ok
+
+    BroadwayKafka.update_topics(MyBroadway, [])
+    :ok
   """
   def update_topics(name, topics) do
     each_producer(name, &GenServer.cast(&1, {:update_topics, topics}))
