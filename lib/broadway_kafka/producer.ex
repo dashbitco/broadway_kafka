@@ -19,7 +19,7 @@ defmodule BroadwayKafka.Producer do
           # List of tuples
           [{"kafka-vm1", 9092}, {"kafka-vm2", 9092}, {"kafka-vm3", 9092}]
 
-          # Single `String.t`
+          # String
           "kafka-vm1:9092,kafka-vm2:9092,kafka-vm3:9092"
 
     * `:group_id` - Required. A unique string that identifies the consumer group the producer
@@ -229,6 +229,13 @@ defmodule BroadwayKafka.Producer do
     else
       {:noreply, [], %{state | revoke_caller: from}}
     end
+  end
+
+  @impl GenStage
+  def handle_cast({:update_topics, topics}, state) do
+    state.client.update_topics(state.group_coordinator, topics)
+
+    {:noreply, [], state}
   end
 
   @impl GenStage

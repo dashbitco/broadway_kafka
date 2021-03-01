@@ -141,6 +141,11 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
+  @impl true
+  def update_topics(group_coordinator, topics) do
+    :brod_group_coordinator.update_topics(group_coordinator, topics)
+  end
+
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
     :brod_group_coordinator.start_link(
       client_id,
