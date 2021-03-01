@@ -1,14 +1,13 @@
 defmodule BroadwayKafka do
   @moduledoc """
-  Helpers for BroadwayKafka
+  Helpers for BroadwayKafka.
 
-  For the producer, view `BroadwayKafka.Producer`
+  You can find the Broadway producer in `BroadwayKafka.Producer`.
   """
 
   @doc """
-  Changes topics from a running BroadwayKafka instance
-
-  Updates topics in all producers, one after another
+  Sequenntially updates topics in all Broadway producers in the
+  pipeline given by `name`.
 
   ## Examples
 
@@ -17,6 +16,7 @@ defmodule BroadwayKafka do
 
       BroadwayKafka.update_topics(MyBroadway, [])
       :ok
+
   """
   def update_topics(name, topics) do
     each_producer(name, &GenServer.cast(&1, {:update_topics, topics}))
