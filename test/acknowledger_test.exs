@@ -44,6 +44,12 @@ defmodule BroadwayKafka.AcknowledgerTest do
     assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13, 14])
     assert {false, 16, ack} = Ack.update_current_offset(ack, @foo, [10, 11, 12, 15, 16, 18, 19])
     assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [17])
+
+    # Compaction skips offset at the beginning
+    ack = Ack.update_last_offset(@ack, @foo, 20)
+    assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13, 14])
+    assert {false, 16, ack} = Ack.update_current_offset(ack, @foo, [10, 15, 16, 18, 19])
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [17])
   end
 
   test "all_drained?" do
