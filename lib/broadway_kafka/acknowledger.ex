@@ -55,7 +55,7 @@ defmodule BroadwayKafka.Acknowledger do
   @doc """
   Updates the last offset after every polling.
   """
-  @spec update_last_offset(t, key, :brod.offset, seen_offsets) :: t
+  @spec update_last_offset(t, key, :brod.offset(), seen_offsets) :: t
   def update_last_offset(acknowledgers, key, last_offset, new_offsets) do
     %{^key => {pending, _, seen}} = acknowledgers
     %{acknowledgers | key => {pending ++ new_offsets, last_offset, seen}}
