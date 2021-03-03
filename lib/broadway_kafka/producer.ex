@@ -552,26 +552,21 @@ defmodule BroadwayKafka.Producer do
   ## Buffer handling
 
   defp split_demand(list, acks, key, demand) do
-    case reverse_split_demand(list, demand, []) do
-      {demand, [message | _] = front, back} ->
-        acks = Acknowledger.update_last_offset(acks, key, message.metadata.offset + 1)
-        {acks, demand, Enum.reverse(front), back}
-
-      {demand, [], back} ->
-        {acks, demand, [], back}
-    end
+    {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], [])
+    acks = update_last_offset(acks, key, reversed)
+    {acks, demand, Enum.reverse(acc), rest}
   end
 
-  defp reverse_split_demand(rest, 0, acc) do
-    {0, acc, rest}
+  defp reverse_split_demand(rest, 0, reversed, acc) do
+    {rest, 0, reversed, acc}
   end
 
-  defp reverse_split_demand([], demand, acc) do
-    {demand, acc, []}
+  defp reverse_split_demand([], demand, reversed, acc) do
+    {[], demand, reversed, acc}
   end
 
-  defp reverse_split_demand([head | tail], demand, acc) do
-    reverse_split_demand(tail, demand - 1, [head | acc])
+  defp reverse_split_demand([head | tail], demand, reversed, acc) do
+    reverse_split_demand(tail, demand - 1, [head | reversed], [head | acc])
   end
 
   defp enqueue_many(queue, _key, []), do: queue
@@ -580,8 +575,8 @@ defmodule BroadwayKafka.Producer do
   defp dequeue_many(queue, acks, demand, acc) when demand > 0 do
     case :queue.out(queue) do
       {{:value, {key, list}}, queue} ->
-        {demand, [message | _] = acc, rest} = reverse_split_demand(list, demand, acc)
-        acks = Acknowledger.update_last_offset(acks, key, message.metadata.offset + 1)
+        {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], acc)
+        acks = update_last_offset(acks, key, reversed)
 
         case {demand, rest} do
           {0, []} ->
@@ -597,6 +592,16 @@ defmodule BroadwayKafka.Producer do
       {:empty, queue} ->
         {acks, demand, Enum.reverse(acc), queue}
     end
+  end
+
+  defp update_last_offset(acks, key, [message | _] = reversed) do
+    last = message.metadata.offset + 1
+    offsets = Enum.reduce(reversed, [], &[&1.metadata.offset | &2])
+    Acknowledger.update_last_offset(acks, key, last, offsets)
+  end
+
+  defp update_last_offset(acks, _key, []) do
+    acks
   end
 
   defp reset_buffer(state) do

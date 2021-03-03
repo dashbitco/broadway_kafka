@@ -13,8 +13,8 @@ defmodule BroadwayKafka.AcknowledgerTest do
 
   test "add" do
     assert @ack == %{
-             @foo => {9, 10, []},
-             @bar => {-1, 0, []}
+             @foo => {[], 10, []},
+             @bar => {[], 0, []}
            }
   end
 
@@ -28,21 +28,40 @@ defmodule BroadwayKafka.AcknowledgerTest do
   end
 
   test "update_current_offset" do
-    ack = Ack.update_last_offset(@ack, @foo, 20)
-    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, Enum.to_list(10..19))
+    ack = Ack.update_last_offset(@ack, @foo, 20, Enum.to_list(10..19))
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, Enum.to_list(9..19))
 
-    ack = Ack.update_last_offset(@ack, @foo, 20)
+    ack = Ack.update_last_offset(@ack, @foo, 20, Enum.to_list(10..19))
     assert {false, 10, ack} = Ack.update_current_offset(ack, @foo, [10, 13, 14])
     assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [11, 12, 15, 16, 17, 18, 19])
 
-    ack = Ack.update_last_offset(@ack, @foo, 20)
+    ack = Ack.update_last_offset(@ack, @foo, 20, Enum.to_list(10..19))
     assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13, 14])
     assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [11, 12, 15, 16, 17, 18, 19])
     assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [10])
 
-    ack = Ack.update_last_offset(@ack, @foo, 20)
+    ack = Ack.update_last_offset(@ack, @foo, 20, Enum.to_list(10..19))
     assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13, 14])
     assert {false, 16, ack} = Ack.update_current_offset(ack, @foo, [10, 11, 12, 15, 16, 18, 19])
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [17])
+  end
+
+  test "update_current_offset with gaps" do
+    ack = Ack.update_last_offset(@ack, @foo, 20, [11, 13, 15, 17, 19])
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [9, 11, 13, 15, 17, 19])
+
+    ack = Ack.update_last_offset(@ack, @foo, 20, [11, 13, 15, 17, 19])
+    assert {false, 12, ack} = Ack.update_current_offset(ack, @foo, [11, 15])
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [13, 17, 19])
+
+    ack = Ack.update_last_offset(@ack, @foo, 20, [11, 13, 15, 17, 19])
+    assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13])
+    assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [15, 17, 19])
+    assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [11])
+
+    ack = Ack.update_last_offset(@ack, @foo, 20, [11, 13, 15, 17, 19])
+    assert {false, nil, ack} = Ack.update_current_offset(ack, @foo, [13])
+    assert {false, 16, ack} = Ack.update_current_offset(ack, @foo, [11, 15, 19])
     assert {true, 19, _} = Ack.update_current_offset(ack, @foo, [17])
   end
 
@@ -50,7 +69,7 @@ defmodule BroadwayKafka.AcknowledgerTest do
     ack = @ack
     assert Ack.all_drained?(ack)
 
-    ack = Ack.update_last_offset(ack, @foo, 100)
+    ack = Ack.update_last_offset(ack, @foo, 100, Enum.to_list(10..99))
     refute Ack.all_drained?(ack)
 
     assert {false, 49, ack} = Ack.update_current_offset(ack, @foo, Enum.to_list(10..49))
@@ -64,7 +83,7 @@ defmodule BroadwayKafka.AcknowledgerTest do
   describe "property based testing" do
     # We generate a list from 10..99 and we break it into 1..9 random parts.
     test "drained?" do
-      ack = Ack.update_last_offset(@ack, @foo, 100)
+      ack = Ack.update_last_offset(@ack, @foo, 100, Enum.to_list(10..99))
 
       for n_parts <- 1..9 do
         groups = Enum.group_by(10..99, fn _ -> :rand.uniform(n_parts) end)

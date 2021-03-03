@@ -4,9 +4,9 @@ defmodule BroadwayKafka.Acknowledger do
 
   @type t :: %{key => value}
   @type key :: {:brod.group_generation_id(), :brod.topic(), :brod.partition()}
-  @type value ::
-          {current_offset :: :brod.offset(), last_offset :: :brod.offset(), pending_offsets}
+  @type value :: {pending_offsets, last_offset :: :brod.offset(), seen_offsets}
   @type pending_offsets :: [:brod.offset()]
+  @type seen_offsets :: [:brod.offset()]
 
   @spec new() :: t
   def new(), do: %{}
@@ -19,7 +19,7 @@ defmodule BroadwayKafka.Acknowledger do
   def add(acknowledgers, list) do
     for entry <- list,
         {generation_id, topic, partition, offset} = entry,
-        do: {{generation_id, topic, partition}, {offset - 1, offset, :ordsets.new()}},
+        do: {{generation_id, topic, partition}, {:ordsets.new(), offset, :ordsets.new()}},
         into: acknowledgers
   end
 
@@ -33,7 +33,7 @@ defmodule BroadwayKafka.Acknowledger do
   Then on :poll, one should call `last_offset/2`, see if the key is
   still valid. If so, we should poll Kafka and generate messages.
   The `ack_ref` of each message should be `{producer_pid, ack_key}`.
-  Once poll is done, `update_last_offset/3` must be called every
+  Once poll is done, `update_last_offset/4` must be called every
   time messages are sent to the client.
   """
   @spec keys(t) :: [key]
@@ -55,19 +55,20 @@ defmodule BroadwayKafka.Acknowledger do
   @doc """
   Updates the last offset after every polling.
   """
-  @spec update_last_offset(t, key, :brod.offset()) :: t
-  def update_last_offset(acknowledgers, key, last_offset) do
-    %{^key => {current, _, pending}} = acknowledgers
-    %{acknowledgers | key => {current, last_offset, pending}}
+  @spec update_last_offset(t, key, :brod.offset, seen_offsets) :: t
+  def update_last_offset(acknowledgers, key, last_offset, new_offsets) do
+    %{^key => {pending, _, seen}} = acknowledgers
+    %{acknowledgers | key => {pending ++ new_offsets, last_offset, seen}}
   end
 
   @doc """
   Receives a list of offsets update the current key.
-  Returns `{drained?, t}`. The `drained?` value should
-  be used a quick check during draining before checking
-  if all partitions are drained.
+  Returns `{drained?, new_offset, t}`. The `drained?`
+  value should be used a quick check during draining
+  before checking if all partitions are drained.
 
-      {drained?, new_offset, acknowledgers} = Acknowledger.update_current_offset(state.acknowledgers, key, offsets)
+      {drained?, new_offset, acknowledgers} =
+        Acknowledger.update_current_offset(state.acknowledgers, key, offsets)
 
       if new_offset do
         :brod_group_coordinator.ack(..., new_offset)
@@ -80,36 +81,33 @@ defmodule BroadwayKafka.Acknowledger do
   @spec update_current_offset(t, key, [:brod.offset()]) ::
           {drained? :: boolean, :brod.offset() | nil, t}
   def update_current_offset(acknowledgers, key, offsets) when is_list(offsets) do
-    %{^key => {current, last, pending}} = acknowledgers
-    {new_current, new_pending} = update_offsets(offsets, current, pending)
-    update = if new_current > current, do: new_current, else: nil
-    value = {new_current, last, new_pending}
+    %{^key => {pending, last, seen}} = acknowledgers
+    {new_pending, new_seen} = update_offsets(offsets, pending, seen)
+
+    next = List.first(pending) || last
+    new_next = List.first(new_pending) || last
+    update = if new_next > next, do: new_next - 1, else: nil
+
+    value = {new_pending, last, new_seen}
     {drained?(value), update, %{acknowledgers | key => value}}
   end
 
   # Discard older offsets
-  defp update_offsets([offset | offsets], current, all_pending) when offset <= current do
-    update_offsets(offsets, current, all_pending)
-  end
+  defp update_offsets([offset | offsets], [current | _] = pending, seen)
+       when offset < current,
+       do: update_offsets(offsets, pending, seen)
 
   # Bump latest offset
-  defp update_offsets([offset | offsets], current, all_pending) when current + 1 == offset do
-    update_offsets(offsets, offset, all_pending)
-  end
+  defp update_offsets([offset | offsets], [offset | pending], seen),
+    do: update_offsets(offsets, pending, seen)
 
-  # Bump from pending
-  defp update_offsets(offsets, current, [pending | all_pending]) when current + 1 == pending do
-    update_offsets(offsets, pending, all_pending)
-  end
+  # Bump from seen
+  defp update_offsets(offsets, [current | pending], [current | seen]),
+    do: update_offsets(offsets, pending, seen)
 
   # Merge any left over
-  defp update_offsets(offsets, current, all_pending) do
-    {current, :ordsets.union(offsets, all_pending)}
-  end
-
-  defp drained?({offset, last_offset, pending_offsets}) do
-    offset + 1 == last_offset and pending_offsets == []
-  end
+  defp update_offsets(offsets, pending, seen),
+    do: {pending, :ordsets.union(offsets, seen)}
 
   @doc """
   Returns if all keys drained.
@@ -119,8 +117,11 @@ defmodule BroadwayKafka.Acknowledger do
     Enum.all?(map, fn {_, v} -> drained?(v) end)
   end
 
+  defp drained?({[], _, []}), do: true
+  defp drained?(_), do: false
+
   @doc """
-  The ack callback. It simples sends messages to the annotated producer.
+  The ack callback. It simply sends messages to the annotated producer.
   """
   def ack({producer_pid, key}, successful, failed) do
     offsets =
