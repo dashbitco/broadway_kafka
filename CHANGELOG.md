@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.2.0 (2021-03-11)
+
+  * Add an API for updating topics on producers
+  * Support consuming compacted topics
+
 ## v0.1.4 (2020-07-25)
 
   * Relax Brod dependency
