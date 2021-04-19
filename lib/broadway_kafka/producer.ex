@@ -80,6 +80,9 @@ defmodule BroadwayKafka.Producer do
       partition. Default is 1048576 (1 MiB). Setting greater values can improve server
       throughput at the cost of more memory consumption.
 
+    * `:max_wait_time` - Optional. Time in millisecond. Max number of milliseconds allowed for the broker to collect
+    `min_bytes' of messages in fetch response. Default is 1000ms.
+
   ## Client config options
 
   The available options that will be internally passed to `:brod.start_client/3`.

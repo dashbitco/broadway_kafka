@@ -183,6 +183,20 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_bytes] == 3
     end
 
+    test ":max_wait_time is optional non-negative integer" do
+      opts = put_in(@opts, [:fetch_config, :max_wait_time], :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :max_wait_time to be a positive integer, got: :an_atom"}
+
+      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(@opts)
+      assert not Map.has_key?(fetch_config, :max_wait_time)
+
+      opts = put_in(@opts, [:fetch_config, :max_wait_time], 3)
+      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      assert fetch_config[:max_wait_time] == 3
+    end
+
     test ":sasl is an optional tuple of SASL mechanism, username and password" do
       opts = put_in(@opts, [:client_config, :sasl], :an_atom)
 

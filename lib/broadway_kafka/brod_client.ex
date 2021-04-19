@@ -17,7 +17,8 @@ defmodule BroadwayKafka.BrodClient do
 
   @supported_fetch_config_options [
     :min_bytes,
-    :max_bytes
+    :max_bytes,
+    :max_wait_time
   ]
 
   @supported_client_config_options [
@@ -234,6 +235,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_bytes, "a positive integer", value)
 
+  defp validate_option(:max_wait_time, value) when not is_integer(value) or value < 1,
+    do: validation_error(:max_wait_time, "a positive integer", value)
+
   defp validate_option(:sasl, value) do
     with {mechanism, username, password}
          when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
@@ -278,7 +282,8 @@ defmodule BroadwayKafka.BrodClient do
     with {:ok, [_ | _] = config} <-
            validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options),
          {:ok, _} <- validate(config, :min_bytes),
-         {:ok, _} <- validate(config, :max_bytes) do
+         {:ok, _} <- validate(config, :max_bytes),
+         {:ok, _} <- validate(config, :max_wait_time) do
       {:ok, config}
     end
   end
