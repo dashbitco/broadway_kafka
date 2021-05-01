@@ -24,7 +24,7 @@ defmodule BroadwayKafka do
 
   defp each_producer(server, fun) when is_function(fun, 1) do
     server
-    |> Broadway.Server.producer_names()
+    |> Broadway.producer_names()
     |> Enum.each(fun)
   end
 end
