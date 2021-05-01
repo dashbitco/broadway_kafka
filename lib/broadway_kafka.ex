@@ -6,7 +6,7 @@ defmodule BroadwayKafka do
   """
 
   @doc """
-  Sequenntially updates topics in all Broadway producers in the
+  Sequentially updates topics in all Broadway producers in the
   pipeline given by `name`.
 
   ## Examples
