@@ -25,7 +25,7 @@ defmodule BroadwayKafka.BrodClient do
     :ssl,
     :sasl,
     :connect_timeout,
-    :client_id
+    :client_id_prefix
   ]
 
   @default_receive_interval 2000
@@ -239,8 +239,8 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_wait_time, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_wait_time, "a positive integer", value)
 
-  defp validate_option(:client_id, value) when not is_atom(value),
-    do: validation_error(:client_id, "an atom", value)
+  defp validate_option(:client_id_prefix, value) when not is_atom(value),
+    do: validation_error(:client_id_prefix, "an atom", value)
 
   defp validate_option(:sasl, value) do
     with {mechanism, username, password}
@@ -295,7 +295,7 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_client_config(opts) do
     with {:ok, [_ | _] = config} <-
            validate_supported_opts(opts, :client_config, @supported_client_config_options),
-         {:ok, _} <- validate(config, :client_id),
+         {:ok, _} <- validate(config, :client_id_prefix),
          {:ok, _} <- validate(config, :sasl),
          {:ok, _} <- validate(config, :ssl),
          {:ok, _} <- validate(config, :connect_timeout) do

@@ -87,25 +87,23 @@ defmodule BroadwayKafka.Producer do
 
   The available options that will be internally passed to `:brod.start_client/3`.
 
-    * `:client_id` - Optional. An atom that will be passed to `:brod` as the client id parameter for the connection. Example:
-    `client_id: :"\#{Node.self()} - \#{__MODULE__}"`. This generates the following connection log from our integration tests:
+    * `:client_id_prefix` - Optional. An atom that will be used to build the client id passed to `:brod`. The example value
+    `client_id_prefix: :"\#{Node.self()} -"` would generate the following connection log from our integration tests:
 
-          21:35:46.455 [info] :supervisor: {:local, :brod_sup}
-          :started: [
-          pid: #PID<0.308.0>,
-          id: :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Client",
+        20:41:37.717 [info]      :supervisor: {:local, :brod_sup}
+            :started: [
+          pid: #PID<0.286.0>,
+          id: :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
           mfargs: {:brod_client, :start_link,
            [
              [localhost: 9092],
-             :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Client",
-             [
-               client_id: :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Client"
-             ]
+             :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
+             [client_id_prefix: :"nonode@nohost - "]
            ]},
           restart_type: {:permanent, 10},
           shutdown: 5000,
           child_type: :worker
-          ]
+        ]
 
     * `:sasl` - Optional. A a tuple of mechanism which can be `:plain`, `:scram_sha_256` or `:scram_sha_512`, username and password. See the `:brod`'s
     [`Authentication Support`](https://github.com/klarna/brod#authentication-support) documentation
@@ -195,8 +193,8 @@ defmodule BroadwayKafka.Producer do
       {:ok, config} ->
         {_, producer_name} = Process.info(self(), :registered_name)
 
-        client_id =
-          get_in(config, [:client_config, :client_id]) || Module.concat([producer_name, Client])
+        prefix = get_in(config, [:client_config, :client_id_prefix])
+        client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
 
         state = %{
           client: client,
