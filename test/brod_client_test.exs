@@ -197,18 +197,18 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_wait_time] == 3
     end
 
-    test ":client_id is an optional atom value" do
-      opts = put_in(@opts, [:client_config, :client_id], "wrong type")
+    test ":client_id_prefix is an optional atom value" do
+      opts = put_in(@opts, [:client_config, :client_id_prefix], "wrong type")
 
       assert BrodClient.init(opts) ==
-               {:error, "expected :client_id to be an atom, got: \"wrong type\""}
+               {:error, "expected :client_id_prefix to be an atom, got: \"wrong type\""}
 
-      opts = put_in(@opts, [:client_config, :client_id], :an_atom)
+      opts = put_in(@opts, [:client_config, :client_id_prefix], :an_atom)
 
       assert {:ok,
               %{
                 client_config: [
-                  client_id: :an_atom
+                  client_id_prefix: :an_atom
                 ]
               }} = BrodClient.init(opts)
     end
