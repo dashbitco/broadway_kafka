@@ -65,9 +65,6 @@ defmodule BroadwayKafka.ConsumerTest do
                ],
                fetch_config: [
                  max_bytes: 10_240
-               ],
-               client_config: [
-                 client_id: :"#{Node.self()} - #{Module.concat([__MODULE__, Client])}"
                ]
              ]},
           concurrency: 3
