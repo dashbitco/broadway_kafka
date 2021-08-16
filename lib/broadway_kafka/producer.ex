@@ -87,8 +87,9 @@ defmodule BroadwayKafka.Producer do
 
   The available options that will be internally passed to `:brod.start_client/3`.
 
-    * `:client_id_prefix` - Optional. An atom that will be used to build the client id passed to `:brod`. The example value
-    `client_id_prefix: :"\#{Node.self()} -"` would generate the following connection log from our integration tests:
+    * `:client_id_prefix` - Optional. A string that will be used to build the client id passed to `:brod`. The example
+    value `client_id_prefix: :"\#{Node.self()} -"` would generate the following connection log from our integration
+    tests:
 
         20:41:37.717 [info]      :supervisor: {:local, :brod_sup}
             :started: [
