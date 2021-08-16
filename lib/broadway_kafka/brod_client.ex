@@ -239,8 +239,8 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:max_wait_time, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_wait_time, "a positive integer", value)
 
-  defp validate_option(:client_id_prefix, value) when not is_atom(value),
-    do: validation_error(:client_id_prefix, "an atom", value)
+  defp validate_option(:client_id_prefix, value) when not is_binary(value),
+    do: validation_error(:client_id_prefix, "a string", value)
 
   defp validate_option(:sasl, value) do
     with {mechanism, username, password}
