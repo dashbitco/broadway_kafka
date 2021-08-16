@@ -197,6 +197,22 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_wait_time] == 3
     end
 
+    test ":client_id_prefix is an optional atom value" do
+      opts = put_in(@opts, [:client_config, :client_id_prefix], :wrong_type)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :client_id_prefix to be a string, got: :wrong_type"}
+
+      opts = put_in(@opts, [:client_config, :client_id_prefix], "a string")
+
+      assert {:ok,
+              %{
+                client_config: [
+                  client_id_prefix: "a string"
+                ]
+              }} = BrodClient.init(opts)
+    end
+
     test ":sasl is an optional tuple of SASL mechanism, username and password" do
       opts = put_in(@opts, [:client_config, :sasl], :an_atom)
 
