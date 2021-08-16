@@ -91,20 +91,20 @@ defmodule BroadwayKafka.Producer do
     value `client_id_prefix: :"\#{Node.self()} -"` would generate the following connection log from our integration
     tests:
 
-        20:41:37.717 [info]      :supervisor: {:local, :brod_sup}
-            :started: [
-          pid: #PID<0.286.0>,
-          id: :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
-          mfargs: {:brod_client, :start_link,
-           [
-             [localhost: 9092],
-             :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
-             [client_id_prefix: :"nonode@nohost - "]
-           ]},
-          restart_type: {:permanent, 10},
-          shutdown: 5000,
-          child_type: :worker
-        ]
+          20:41:37.717 [info]      :supervisor: {:local, :brod_sup}
+          :started: [
+            pid: #PID<0.286.0>,
+            id: :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
+            mfargs: {:brod_client, :start_link,
+             [
+               [localhost: 9092],
+               :"nonode@nohost - Elixir.BroadwayKafka.ConsumerTest.MyBroadway.Broadway.Producer_0.Client",
+               [client_id_prefix: :"nonode@nohost - "]
+             ]},
+            restart_type: {:permanent, 10},
+            shutdown: 5000,
+            child_type: :worker
+          ]
 
     * `:sasl` - Optional. A a tuple of mechanism which can be `:plain`, `:scram_sha_256` or `:scram_sha_512`, username and password. See the `:brod`'s
     [`Authentication Support`](https://github.com/klarna/brod#authentication-support) documentation
