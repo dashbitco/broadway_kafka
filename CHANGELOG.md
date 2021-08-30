@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.3.0-dev
+
+  * Support `:client_id_prefix` to make it easier to identify Kafka connections
+  * Add support for `:max_wait_time` in fetch
+  * Require Broadway 1.0
+
 ## v0.2.0 (2021-03-11)
 
   * Add an API for updating topics on producers
