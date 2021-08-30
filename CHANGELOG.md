@@ -1,6 +1,6 @@
 # Changelog
 
-## v0.3.0-dev
+## v0.3.0 (2021-08-30)
 
   * Support `:client_id_prefix` to make it easier to identify Kafka connections
   * Add support for `:max_wait_time` in fetch

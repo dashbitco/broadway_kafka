@@ -552,7 +552,7 @@ defmodule BroadwayKafka.ProducerTest do
 
     :sys.suspend(producer)
     flush_messages_received()
-    task = Task.async(fn -> Broadway.Producer.drain(producer) end)
+    task = Task.async(fn -> Broadway.Topology.ProducerStage.drain(producer) end)
     :sys.resume(producer)
     Task.await(task)
 
