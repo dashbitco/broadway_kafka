@@ -276,7 +276,7 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
-  test "fetch messages by chuncks according to :max_bytes" do
+  test "fetch messages by chunks according to :max_bytes" do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server)
 

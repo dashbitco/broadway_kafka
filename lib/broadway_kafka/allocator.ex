@@ -25,7 +25,7 @@ defmodule BroadwayKafka.Allocator do
   def fetch!(name, key) when is_atom(name), do: :ets.lookup_element(name, key, 2)
 
   @doc """
-  Alocates the given `new_entries` for `producer`.
+  Allocates the given `new_entries` for `producer`.
   """
   def allocate(name, producer, new_entries)
       when is_atom(name) and producer >= 0 and is_list(new_entries),
