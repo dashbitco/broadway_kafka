@@ -242,6 +242,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:client_id_prefix, value) when not is_binary(value),
     do: validation_error(:client_id_prefix, "a string", value)
 
+  defp validate_option(:sasl, :undefined),
+    do: {:ok, :undefined}
+
   defp validate_option(:sasl, value) do
     with {mechanism, username, password}
          when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
