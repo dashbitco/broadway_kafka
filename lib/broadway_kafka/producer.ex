@@ -373,8 +373,8 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], %{state | group_coordinator: nil}}
   end
 
-  def handle_info({:EXIT, _sup_pid, reason}, state) do
-    {:stop, reason, state}
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:noreply, state}
   end
 
   @impl GenStage
