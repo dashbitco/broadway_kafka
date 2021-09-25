@@ -456,7 +456,8 @@ defmodule BroadwayKafka.Producer do
   @impl GenStage
   def terminate(_reason, state) do
     %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
-    client.disconnect(group_coordinator, client_id)
+    client.stop_group_coordinator(group_coordinator)
+    client.disconnect(client_id)
     :ok
   end
 
