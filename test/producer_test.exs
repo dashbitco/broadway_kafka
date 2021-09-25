@@ -102,7 +102,7 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def stop_group_coordinator(_pid) do
+    def disconnect(_pid, _client_id) do
       :ok
     end
 
