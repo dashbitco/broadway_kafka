@@ -116,7 +116,12 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   def disconnect(group_coordinator, client_id) do
-    :ok = :brod_group_coordinator.stop(group_coordinator)
+    ref = Process.monitor(group_coordinator)
+    Process.exit(group_coordinator, :kill)
+
+    receive do
+      {:DOWN, ^ref, _, _, _} -> :ok
+    end
     :ok = :brod.stop_client(client_id)
     :ok
   end
