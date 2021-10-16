@@ -158,12 +158,29 @@ defmodule BroadwayKafka.Producer do
 
   ## Handling failed messages
 
-  `broadway_kafka` never stops the flow of the stream, i.e. it will **always ack** the messages
+  `BroadwayKafka` never stops the flow of the stream, i.e. it will **always ack** the messages
   even when they fail. Unlike queue-based connectors, where you can mark a single message as failed.
   In Kafka that's not possible due to its single offset per topic/partition ack strategy. If you
   want to reprocess failed messages, you need to roll your own strategy. A possible way to do that
   is to implement `c:Broadway.handle_failed/2` and send failed messages to a separated stream or queue for
   later processing.
+
+  ## Message metadata
+
+  When producing messages, the following information will be passed to
+  [`Broadway.Message`](`t:Broadway.Message.t/0`)'s metadata.
+
+    * `topic` - The topic the message was published.
+
+    * `partition` - The topic partition.
+
+    * `offset` - The offset assigned to the message inside the partition.
+
+    * `key` - The partition key.
+
+    * `ts` - A timestamp associated with the message.
+
+    * `headers` - The headers of the message.
   """
 
   use GenStage
