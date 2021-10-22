@@ -260,10 +260,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_call(:drain_after_revoke, _from, %{group_coordinator: nil} = state) do
-    unless is_nil(state.callback_module) do
-      state.callback_module.on_drain(state)
-    end
-
+    maybe_invoke_on_partitions_revoke(state.acks, state)
     {:reply, :ok, [], state}
   end
 
@@ -272,10 +269,7 @@ defmodule BroadwayKafka.Producer do
     state = reset_buffer(state)
 
     if Acknowledger.all_drained?(state.acks) do
-      unless is_nil(state.callback_module) do
-        state.callback_module.on_drain(state)
-      end
-
+      maybe_invoke_on_partitions_revoke(state.acks, state)
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
       {:noreply, [], %{state | revoke_caller: from}}
@@ -353,6 +347,7 @@ defmodule BroadwayKafka.Producer do
       Allocator.allocate(allocator_name, broadway_index, topics_partitions)
     end
 
+    maybe_invoke_on_partitions_assign(list, state)
     {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list)}}
   end
 
@@ -415,10 +410,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl Producer
   def prepare_for_draining(state) do
-    unless is_nil(state.callback_module) do
-      state.callback_module.on_drain(state)
-    end
-
+    maybe_invoke_on_partitions_revoke(state.acks, state)
     # On draining, we will continue scheduling the polls, but they will be a no-op.
     {:noreply, [], %{state | shutting_down?: true}}
   end
@@ -666,4 +658,26 @@ defmodule BroadwayKafka.Producer do
   defp schedule_reconnect(timeout) do
     Process.send_after(self(), :reconnect, timeout)
   end
+
+  def maybe_invoke_on_partitions_assign(_, %{callback_module: nil}), do: nil
+  def maybe_invoke_on_partitions_assign(new_assignments, %{callback_module: cb}) do
+    topics_partitions =
+      new_assignments
+      |> Enum.map(fn {_, topic, partition, _} -> {topic, partition} end)
+    if length(topics_partitions) > 0 do
+      cb.on_partitions_assign(topics_partitions)
+    end
+  end
+
+  def maybe_invoke_on_partitions_revoke(_, %{callback_module: nil}), do: nil
+  def maybe_invoke_on_partitions_revoke(revoked_assignments, %{callback_module: cb}) do
+    topics_partitions =
+      revoked_assignments
+      |> Map.keys()
+      |> Enum.map(fn {_, topic, partition} -> {topic, partition} end)
+    if length(topics_partitions) > 0 do
+      cb.on_partitions_revoke(topics_partitions)
+    end
+  end
+
 end

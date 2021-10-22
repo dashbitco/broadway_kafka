@@ -222,15 +222,17 @@ defmodule BroadwayKafka.BrodClient do
     )
   end
 
+  defp validate_option(:callback_module, value) when not is_atom(value),
+    do: validation_error(:callback_module, "an atom", value)
   defp validate_option(:callback_module, value) do
-    unless is_atom(value) and function_exported?(value, :on_drain, 1) do
+    if function_exported?(value, :on_partitions_assign, 1) and function_exported?(value, :on_partitions_revoke, 1) do
+      {:ok, value}
+    else
       validation_error(
         :callback_module,
-        "module containing on_drain/1 function",
+        "module containing on_partitions_assign/1 and on_partitions_revoke/1 functions",
         value
       )
-    else
-      {:ok, value}
     end
   end
 
