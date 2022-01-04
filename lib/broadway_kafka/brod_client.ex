@@ -127,19 +127,40 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
-    if current_offset == :undefined do
-      policy = offset_reset_policy_value(offset_reset_policy)
+    valid_offset_range =
+      @offset_reset_policy_values
+      |> Map.new(fn semantic_offset ->
+        {semantic_offset,
+         lookup_offset(
+           config.hosts,
+           topic,
+           partition,
+           offset_reset_policy_value(offset_reset_policy),
+           config.client_config
+         )}
+      end)
 
-      case :brod.resolve_offset(config.hosts, topic, partition, policy, config.client_config) do
-        {:ok, offset} ->
-          offset
+    case current_offset do
+      :undefined ->
+        valid_offset_range[offset_reset_policy]
 
-        {:error, reason} ->
-          raise "cannot resolve begin offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
-                  "partition=#{partition}). Reason: #{inspect(reason)}"
-      end
-    else
-      current_offset
+      value ->
+        if valid_offset_range[:earliest] <= value and value <= valid_offset_range[:latest] do
+          value
+        else
+          valid_offset_range[offset_reset_policy]
+        end
+    end
+  end
+
+  defp lookup_offset(hosts, topic, partition, policy, client_config) do
+    case :brod.resolve_offset(hosts, topic, partition, policy, client_config) do
+      {:ok, offset} ->
+        offset
+
+      {:error, reason} ->
+        raise "cannot resolve begin offset (hosts=#{inspect(hosts)} topic=#{topic} " <>
+                "partition=#{partition}). Reason: #{inspect(reason)}"
     end
   end
 
