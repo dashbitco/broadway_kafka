@@ -12,7 +12,8 @@ defmodule BroadwayKafka.BrodClient do
   @supported_group_config_options [
     :offset_commit_interval_seconds,
     :rejoin_delay_seconds,
-    :session_timeout_seconds
+    :session_timeout_seconds,
+    :heartbeat_rate_seconds
   ]
 
   @supported_fetch_config_options [
@@ -251,6 +252,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:session_timeout_seconds, value) when not is_integer(value) or value < 1,
     do: validation_error(:session_timeout_seconds, "a positive integer", value)
 
+  defp validate_option(:heartbeat_rate_seconds, value) when not is_integer(value) or value < 1,
+    do: validation_error(:heartbeat_rate_seconds, "a positive integer", value)
+
   defp validate_option(:min_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:min_bytes, "a positive integer", value)
 
@@ -301,7 +305,8 @@ defmodule BroadwayKafka.BrodClient do
            validate_supported_opts(opts, :group_config, @supported_group_config_options),
          {:ok, _} <- validate(config, :offset_commit_interval_seconds),
          {:ok, _} <- validate(config, :rejoin_delay_seconds),
-         {:ok, _} <- validate(config, :session_timeout_seconds) do
+         {:ok, _} <- validate(config, :session_timeout_seconds),
+         {:ok, _} <- validate(config, :heartbeat_rate_seconds) do
       {:ok, config}
     end
   end
