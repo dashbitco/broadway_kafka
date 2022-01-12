@@ -70,7 +70,7 @@ defmodule BroadwayKafka.Producer do
     * `:heartbeat_rate_seconds` - Optional. Time in seconds for member to 'ping' group coordinator.
       Heartbeats are used to ensure that the consumer's session stays active and
       to facilitate rebalancing when new consumers join or leave the group.
-      The value must be set lower than :session_timeout_seconds, but typically should be set no higher than 1/3 of that value.
+      The value must be set lower than `:session_timeout_seconds`, typically equal to or lower than 1/3 of that value.
       It can be adjusted even lower to control the expected time for normal rebalances. Default is 5 seconds.
 
   ## Fetch config options
