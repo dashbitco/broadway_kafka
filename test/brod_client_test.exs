@@ -161,6 +161,18 @@ defmodule BroadwayKafka.BrodClientTest do
       assert group_config[:session_timeout_seconds] == 3
     end
 
+    test ":heartbeat_rate_seconds is an optional positive integer" do
+      opts = put_in(@opts, [:group_config, :heartbeat_rate_seconds], :an_atom)
+
+      assert BrodClient.init(opts) ==
+               {:error,
+                "expected :heartbeat_rate_seconds to be a positive integer, got: :an_atom"}
+
+      opts = put_in(@opts, [:group_config, :heartbeat_rate_seconds], 3)
+      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      assert group_config[:heartbeat_rate_seconds] == 3
+    end
+
     test ":min_bytes is an optional positive integer" do
       opts = put_in(@opts, [:fetch_config, :min_bytes], :an_atom)
 
