@@ -107,6 +107,11 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
+    def disconnect(_pid, _client_id) do
+      :ok
+    end
+
+    @impl true
     def resolve_offset(_topic, _partition, offset, _offset_reset_policy, _config) do
       offset
     end

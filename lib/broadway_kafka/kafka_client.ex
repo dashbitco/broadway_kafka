@@ -52,4 +52,5 @@ defmodule BroadwayKafka.KafkaClient do
   @callback update_topics(:brod.group_coordinator(), [:brod.topic()]) :: :ok
   @callback connected?(:brod.client()) :: boolean
   @callback stop_group_coordinator(pid) :: :ok
+  @callback disconnect(:brod.client()) :: :ok
 end

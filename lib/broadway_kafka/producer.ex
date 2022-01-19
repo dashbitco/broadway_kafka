@@ -208,6 +208,8 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def init(opts) do
+    Process.flag(:trap_exit, true)
+
     client = opts[:client] || BroadwayKafka.BrodClient
 
     case client.init(opts) do
@@ -394,6 +396,10 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], %{state | group_coordinator: nil}}
   end
 
+  def handle_info({:EXIT, _pid, _reason}, state) do
+    {:noreply, state}
+  end
+
   @impl GenStage
   def handle_info(:reconnect, state) do
     if state.client.connected?(state.client_id) do
@@ -472,7 +478,9 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def terminate(_reason, state) do
-    state.client.stop_group_coordinator(state.group_coordinator)
+    %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
+    client.stop_group_coordinator(group_coordinator)
+    client.disconnect(client_id)
     :ok
   end
 

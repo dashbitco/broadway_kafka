@@ -127,6 +127,12 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   @impl true
+  def disconnect(client_id) do
+    :ok = :brod.stop_client(client_id)
+    :ok
+  end
+
+  @impl true
   def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
     valid_offset_range =
       @offset_reset_policy_values
