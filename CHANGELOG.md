@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.3.1 (2022-01-19)
+
+  * Allow `:sasl` option to be set to `:undefined`
+  * Allow `:heartbeat_rate_seconds` option to group config
+  * Handle `:offset_out_of_range` errors when resolving offset
+  * Ensure `brod` processes terminate on disconnections
+
 ## v0.3.0 (2021-08-30)
 
   * Support `:client_id_prefix` to make it easier to identify Kafka connections
