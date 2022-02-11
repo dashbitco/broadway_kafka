@@ -134,29 +134,18 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
-    valid_offset_range =
-      @offset_reset_policy_values
-      |> Map.new(fn semantic_offset ->
-        {semantic_offset,
-         lookup_offset(
-           config.hosts,
-           topic,
-           partition,
-           offset_reset_policy_value(offset_reset_policy),
-           config.client_config
-         )}
-      end)
+    policy = offset_reset_policy_value(offset_reset_policy)
 
-    case current_offset do
-      :undefined ->
-        valid_offset_range[offset_reset_policy]
+    if current_offset == :undefined do
+      lookup_offset(config.hosts, topic, partition, policy, config.client_config)
+    else
+      case :brod.fetch(config.hosts, topic, partition, current_offset) do
+        {:ok, _} ->
+          current_offset
 
-      value ->
-        if valid_offset_range[:earliest] <= value and value <= valid_offset_range[:latest] do
-          value
-        else
-          valid_offset_range[offset_reset_policy]
-        end
+        {:error, :offset_out_of_range} ->
+          lookup_offset(config.hosts, topic, partition, policy, config.client_config)
+      end
     end
   end
 
