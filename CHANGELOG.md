@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.2 (2022-02-15)
+
+  * Ensure reset_policy is only used when offset is `undefined` or `out_of_range`
+
 ## v0.3.1 (2022-01-19)
 
   * Allow `:sasl` option to be set to `:undefined`
