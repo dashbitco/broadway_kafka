@@ -116,7 +116,7 @@ defmodule BroadwayKafka.ConsumerTest do
     {broadway_pid, messages_agent} = start_broadway()
 
     # Let's wait for the assignments before start sending messages
-    wait_for_assignments(broadway_pid)
+    wait_for_assignments(MyBroadway)
 
     IO.puts("Sending messages...")
     send_messages(Config.n_messages(), hosts, topic)
@@ -251,9 +251,9 @@ defmodule BroadwayKafka.ConsumerTest do
     Enum.reverse(ordering_problems)
   end
 
-  defp wait_for_assignments(broadway_pid) do
+  defp wait_for_assignments(broadway_name) do
     producers =
-      broadway_pid
+      broadway_name
       |> Broadway.producer_names()
       |> Enum.map(fn producer ->
         pid = Process.whereis(producer)
