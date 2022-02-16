@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.3 (2022-02-16)
+
+  * Ensure `handle_info` does not crash when receiving an EXIT message in case Kafka goes offline
+
 ## v0.3.2 (2022-02-15)
 
   * Ensure reset_policy is only used when offset is `undefined` or `out_of_range`
