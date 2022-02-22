@@ -143,7 +143,7 @@ defmodule BroadwayKafka.BrodClient do
         {:ok, _} ->
           current_offset
 
-        {:error, :offset_out_of_range} ->
+        {:error, _} ->
           lookup_offset(config.hosts, topic, partition, policy, config.client_config)
       end
     end
