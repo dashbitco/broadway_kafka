@@ -143,6 +143,8 @@ defmodule BroadwayKafka.BrodClient do
         {:ok, _} ->
           current_offset
 
+        # We are looking for :offset_out_of_range but this may fail
+        # in earlier Kafka versions, so we perform a catch-all.
         {:error, _} ->
           lookup_offset(config.hosts, topic, partition, policy, config.client_config)
       end
