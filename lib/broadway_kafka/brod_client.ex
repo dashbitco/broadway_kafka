@@ -139,13 +139,11 @@ defmodule BroadwayKafka.BrodClient do
     if current_offset == :undefined do
       lookup_offset(config.hosts, topic, partition, policy, config.client_config)
     else
-      case :brod.fetch(config.hosts, topic, partition, current_offset) do
+      case :brod.fetch({config.hosts, config.client_config}, topic, partition, current_offset) do
         {:ok, _} ->
           current_offset
 
-        # We are looking for :offset_out_of_range but this may fail
-        # in earlier Kafka versions, so we perform a catch-all.
-        {:error, _} ->
+        {:error, :offset_out_of_range} ->
           lookup_offset(config.hosts, topic, partition, policy, config.client_config)
       end
     end
