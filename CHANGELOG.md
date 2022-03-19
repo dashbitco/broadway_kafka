@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.3.4 (2022-02-19)
+
+  * Pass SSL configurations when validating offset
+
 ## v0.3.3 (2022-02-16)
 
   * Ensure `handle_info` does not crash when receiving an EXIT message in case Kafka goes offline
