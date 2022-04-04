@@ -14,7 +14,7 @@ defmodule BroadwayKafka.Producer do
       e.g. [localhost: 9092]. Examples:
 
           # Keyword
-          [kafka-vm1: 9092, kafka-vm2: 9092, kafka-vm3: 9092]
+          ["kafka-vm1": 9092, "kafka-vm2": 9092, "kafka-vm3": 9092]
 
           # List of tuples
           [{"kafka-vm1", 9092}, {"kafka-vm2", 9092}, {"kafka-vm3", 9092}]
