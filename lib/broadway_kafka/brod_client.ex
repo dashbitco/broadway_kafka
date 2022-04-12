@@ -265,6 +265,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:sasl, :undefined),
     do: {:ok, :undefined}
 
+  defp validate_option(:sasl, value = {:callback, _callback_module, _opts}),
+    do: {:ok, value}
+
   defp validate_option(:sasl, value) do
     with {mechanism, username, password}
          when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
