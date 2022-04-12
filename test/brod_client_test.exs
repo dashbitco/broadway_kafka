@@ -248,6 +248,17 @@ defmodule BroadwayKafka.BrodClientTest do
               }} = BrodClient.init(opts)
     end
 
+    test ":sasl is an optional tuple of :callback, SASL Authentication Plugin module and opts" do
+      opts = put_in(@opts, [:client_config, :sasl], {:callback, FakeSaslMechanismPlugin, {}})
+
+      assert {:ok,
+              %{
+                client_config: [
+                  sasl: {:callback, FakeSaslMechanismPlugin, {}}
+                ]
+              }} = BrodClient.init(opts)
+    end
+
     test ":ssl is an optional boolean or keyword list" do
       opts = put_in(@opts, [:client_config, :ssl], :an_atom)
 
@@ -291,6 +302,15 @@ defmodule BroadwayKafka.BrodClientTest do
                   connect_timeout: 5000
                 ]
               }} = BrodClient.init(opts)
+    end
+  end
+
+  defmodule FakeSaslMechanismPlugin do
+    @behaviour :kpro_auth_backend
+
+    @impl true
+    def auth(_host, _sock, _mod, _client_id, _timeout, _sasl_opts = {}) do
+      :ok
     end
   end
 end
