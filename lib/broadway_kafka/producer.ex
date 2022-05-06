@@ -222,6 +222,14 @@ defmodule BroadwayKafka.Producer do
         prefix = get_in(config, [:client_config, :client_id_prefix])
         client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
 
+        max_demand =
+          with [{_first, processor_opts}] <- opts[:broadway][:processors],
+               max_demand when is_integer(max_demand) <- processor_opts[:max_demand] do
+            max_demand
+          else
+            _ -> 10
+          end
+
         state = %{
           client: client,
           client_id: client_id,
@@ -235,7 +243,8 @@ defmodule BroadwayKafka.Producer do
           revoke_caller: nil,
           demand: 0,
           shutting_down?: false,
-          buffer: :queue.new()
+          buffer: :queue.new(),
+          max_demand: max_demand
         }
 
         {:producer, connect(state)}
@@ -288,7 +297,7 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_info({:poll, key}, %{acks: acks, demand: demand} = state) do
+  def handle_info({:poll, key}, %{acks: acks, demand: demand, max_demand: max_demand} = state) do
     # We only poll if:
     #
     #   1. We are not shutting down
@@ -301,9 +310,11 @@ defmodule BroadwayKafka.Producer do
 
     if not state.shutting_down? and state.revoke_caller == nil and offset != nil do
       messages = fetch_messages_from_kafka(state, key, offset)
-      {new_acks, new_demand, messages, pending} = split_demand(messages, acks, key, demand)
+      to_send = min(demand, max_demand)
+      {new_acks, not_sent, messages, pending} = split_demand(messages, acks, key, to_send)
       new_buffer = enqueue_many(state.buffer, key, pending)
 
+      new_demand = demand - to_send + not_sent
       new_state = %{state | acks: new_acks, demand: new_demand, buffer: new_buffer}
       {:noreply, messages, new_state}
     else
