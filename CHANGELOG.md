@@ -1,6 +1,11 @@
 # Changelog
 
-## v0.3.4 (2022-02-19)
+## v0.3.5 (2022-05-12)
+
+  * Do not send more messages per partition than `max_demand`
+  * Support for custom `:sasl` authenticators by allowing :callback to be sent as opts
+
+## v0.3.4 (2022-03-19)
 
   * Pass SSL configurations when validating offset
 
