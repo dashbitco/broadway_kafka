@@ -172,23 +172,21 @@ defmodule BroadwayKafka.ConsumerTest do
   end
 
   defp reset_topic(topic) do
-    cmd_opts = [into: IO.stream(:stdio, :line), stderr_to_stdout: true]
-    delete_args = ["--delete", "--zookeeper", "localhost:2181", "--topic", topic]
+    brokers = [{"localhost", 9092}]
 
-    create_args = [
-      "--create",
-      "--zookeeper",
-      "localhost:2181",
-      "--replication-factor",
-      "1",
-      "--partitions",
-      "3",
-      "--topic",
-      topic
+    :brod.delete_topics(brokers, [topic], 1_000)
+
+    topic_config = [
+      %{
+        config_entries: [],
+        num_partitions: 3,
+        replica_assignment: [],
+        replication_factor: 1,
+        topic: topic
+      }
     ]
 
-    System.cmd("kafka-topics", delete_args, cmd_opts)
-    System.cmd("kafka-topics", create_args, cmd_opts)
+    :brod.create_topics(brokers, topic_config, %{timeout: 1_000})
   end
 
   defp send_messages(n_messages, hosts, topic) do
