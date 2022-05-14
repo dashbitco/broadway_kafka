@@ -222,6 +222,11 @@ defmodule BroadwayKafka.Producer do
       {:ok, config} ->
         {_, producer_name} = Process.info(self(), :registered_name)
 
+        draining_after_revoke_flag =
+          self()
+          |> drain_after_revoke_table_name!()
+          |> drain_after_revoke_table_init!()
+
         prefix = get_in(config, [:client_config, :client_id_prefix])
         client_id = :"#{prefix}#{Module.concat([producer_name, Client])}"
 
@@ -244,6 +249,7 @@ defmodule BroadwayKafka.Producer do
           config: config,
           allocator_names: allocator_names(opts[:broadway]),
           revoke_caller: nil,
+          draining_after_revoke_flag: draining_after_revoke_flag,
           demand: 0,
           shutting_down?: false,
           buffer: :queue.new(),
@@ -278,6 +284,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_call(:drain_after_revoke, _from, %{group_coordinator: nil} = state) do
+    set_draining_after_revoke!(state.draining_after_revoke_flag, false)
     {:reply, :ok, [], state}
   end
 
@@ -286,6 +293,7 @@ defmodule BroadwayKafka.Producer do
     state = reset_buffer(state)
 
     if Acknowledger.all_drained?(state.acks) do
+      set_draining_after_revoke!(state.draining_after_revoke_flag, false)
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
       {:noreply, [], %{state | revoke_caller: from}}
@@ -304,14 +312,16 @@ defmodule BroadwayKafka.Producer do
     # We only poll if:
     #
     #   1. We are not shutting down
-    #   2. Our assignments have not been revoked
+    #   2. We are not waiting for draining after receivd revoke assignment
     #   3. We know the key being acked
     #
     # Note the key may be out of date when polling has been scheduled and
     # assignments were revoked afterwards, which is why check 3 is necessary.
     offset = Acknowledger.last_offset(acks, key)
 
-    if not state.shutting_down? and state.revoke_caller == nil and offset != nil do
+    if not state.shutting_down? and
+         not is_draining_after_revoke?(state.draining_after_revoke_flag) and
+         offset != nil do
       messages = fetch_messages_from_kafka(state, key, offset)
       to_send = min(demand, max_demand)
       {new_acks, not_sent, messages, pending} = split_demand(messages, acks, key, to_send)
@@ -386,6 +396,7 @@ defmodule BroadwayKafka.Producer do
 
     new_state =
       if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
+        set_draining_after_revoke!(state.draining_after_revoke_flag, false)
         GenStage.reply(state.revoke_caller, :ok)
         %{state | revoke_caller: nil, acks: Acknowledger.new()}
       else
@@ -486,6 +497,16 @@ defmodule BroadwayKafka.Producer do
 
   @impl :brod_group_member
   def assignments_revoked(producer_pid) do
+    maybe_process_name = fn
+      pid when is_pid(pid) -> pid
+      name when is_atom(name) -> Process.whereis(name)
+    end
+
+    producer_pid
+    |> maybe_process_name.()
+    |> drain_after_revoke_table_name!()
+    |> set_draining_after_revoke!(true)
+
     GenStage.call(producer_pid, :drain_after_revoke, :infinity)
     :ok
   end
@@ -679,5 +700,27 @@ defmodule BroadwayKafka.Producer do
 
   defp schedule_reconnect(timeout) do
     Process.send_after(self(), :reconnect, timeout)
+  end
+
+  defp drain_after_revoke_table_name!(pid) do
+    {_, producer_name} = Process.info(pid, :registered_name)
+
+    Module.concat([producer_name, DrainingAfterRevoke])
+  end
+
+  defp drain_after_revoke_table_init!(table_name) do
+    table_name = :ets.new(table_name, [:named_table, :public, :set])
+
+    set_draining_after_revoke!(table_name, false)
+
+    table_name
+  end
+
+  defp set_draining_after_revoke!(table_name, value) do
+    :ets.insert(table_name, {:draining, value})
+  end
+
+  defp is_draining_after_revoke?(table_name) do
+    :ets.lookup_element(table_name, :draining, 2)
   end
 end
