@@ -14,17 +14,33 @@ defmodule BroadwayKafka.ConsumerTest do
 
   # Setup
 
-  1. Install Kafka locally on port 9092 (default)
+  1. Create docker-compose.yml file
 
-  See https://kafka.apache.org/quickstart for instructions
+  ```
+  version: '3.9'
+  services:
+  zookeeper:
+    image: wurstmeister/zookeeper
+    ports:
+      - "127.0.0.1:2181:2181"
+  kafka:
+    image: wurstmeister/kafka:2.13-2.7.1
+    ports:
+      - "127.0.0.1:9092:9092"
+    environment:
+      KAFKA_LISTENERS: "INTERNAL://:29092,EXTERNAL://:9092"
+      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      - zookeeper
+  ```
 
-  2. Start Zookeeper
-
-      $ zookeeper-server-start.sh config/zookeeper.properties
-
-  3. Start Kafka
-
-      $ kafka-server-start.sh config/server.properties
+  1. Run Docker
+     $ docker compose up -d
 
   # Running only integration tests
 
