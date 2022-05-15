@@ -162,6 +162,26 @@ defmodule BroadwayKafka.Producer do
   will reassign all its topic/partition to other available consumers, including any Broadway
   producer subscribed to the same topic.
 
+  ## Consumer Rebalancing
+
+  If you are dealing with more than one partitions and have more than one node consuming the data, you'll
+  find yourself in a situation which one node joining the consumer group causes other consumers to go to rebalancing mode
+  and depends on amount messages you are processing, it might take a long time until they go into the balance state.
+  In this case try to adjust:
+
+  * Producer's `concurrency` value: By increasing this value, you are dividing the partitions among more processors.
+
+  * ':rebalance_timeout_seconds` option: By increasing this value, you are telling Kafka's consumer group coordinator
+  to wait longer time for other member of a consumer group before triggering rebalance.
+
+
+  There is no one config fit all. Keep adjusting until it works for you.
+
+  Keep an eye on the logs and if the problem occurs, you'll see a log like this:
+  ```
+  [warning] Elixir.MyApp.Broadway.Broadway.Producer_0.Client: It took 40 seconds to commit the offsets while waiting for acks. You might need to adjust :rebalance_timeout_seconds option for you case
+  ```
+
   ## Handling failed messages
 
   `BroadwayKafka` never stops the flow of the stream, i.e. it will **always ack** the messages
