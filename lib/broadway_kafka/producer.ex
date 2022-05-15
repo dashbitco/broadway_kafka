@@ -73,6 +73,9 @@ defmodule BroadwayKafka.Producer do
       The value must be set lower than `:session_timeout_seconds`, typically equal to or lower than 1/3 of that value.
       It can be adjusted even lower to control the expected time for normal rebalances. Default is 5 seconds.
 
+    * `:rebalance_timeout_seconds` - Optional. Time in seconds for each worker to join the group once a rebalance has begun.
+      If the timeout is exceeded, then the worker will be removed from the group, which will cause offset commit failures. Default is 30.
+
   ## Fetch config options
 
   The available options that will be internally passed to `:brod.fetch/5`.
