@@ -244,7 +244,8 @@ defmodule BroadwayKafka.Producer do
           demand: 0,
           shutting_down?: false,
           buffer: :queue.new(),
-          max_demand: max_demand
+          max_demand: max_demand,
+          draining_after_revoke_started_at: nil
         }
 
         {:producer, connect(state)}
@@ -285,7 +286,12 @@ defmodule BroadwayKafka.Producer do
     if Acknowledger.all_drained?(state.acks) do
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
-      {:noreply, [], %{state | revoke_caller: from}}
+      {:noreply, [],
+       %{
+         state
+         | revoke_caller: from,
+           draining_after_revoke_started_at: System.monotonic_time(:second)
+       }}
     end
   end
 
@@ -384,7 +390,14 @@ defmodule BroadwayKafka.Producer do
     new_state =
       if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
         GenStage.reply(state.revoke_caller, :ok)
-        %{state | revoke_caller: nil, acks: Acknowledger.new()}
+        log_potential_rebalancing_warning(state)
+
+        %{
+          state
+          | revoke_caller: nil,
+            acks: Acknowledger.new(),
+            draining_after_revoke_started_at: nil
+        }
       else
         %{state | acks: updated_acks}
       end
@@ -676,5 +689,22 @@ defmodule BroadwayKafka.Producer do
 
   defp schedule_reconnect(timeout) do
     Process.send_after(self(), :reconnect, timeout)
+  end
+
+  defp log_potential_rebalancing_warning(state) do
+    if state.draining_after_revoke_started_at do
+      finished_at = System.monotonic_time(:second)
+
+      rebalancing_timeout =
+        Keyword.get(state.config[:group_config], :rebalance_timeout_seconds, 30)
+
+      diff = finished_at - state.draining_after_revoke_started_at
+
+      if(diff > rebalancing_timeout) do
+        Logger.warn(
+          "#{state.client_id}: It took #{diff} seconds to commit the offsets while waiting for acks. You might need to adjust :rebalance_timeout_seconds option for you case."
+        )
+      end
+    end
   end
 end
