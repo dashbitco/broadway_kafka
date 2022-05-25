@@ -524,24 +524,28 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp maybe_schedule_poll(state, interval) do
-    %{buffer: buffer, demand: demand, acks: acks, receive_timer: receive_timer} = state
+    if is_draining_after_revoke?(state.draining_after_revoke_flag) do
+      {:noreply, [], state}
+    else
+      %{buffer: buffer, demand: demand, acks: acks, receive_timer: receive_timer} = state
 
-    case dequeue_many(buffer, acks, demand, []) do
-      {acks, 0, events, buffer} ->
-        {:noreply, events, %{state | demand: 0, buffer: buffer, acks: acks}}
+      case dequeue_many(buffer, acks, demand, []) do
+        {acks, 0, events, buffer} ->
+          {:noreply, events, %{state | demand: 0, buffer: buffer, acks: acks}}
 
-      {acks, demand, events, buffer} ->
-        receive_timer = receive_timer || schedule_poll(state, interval)
+        {acks, demand, events, buffer} ->
+          receive_timer = receive_timer || schedule_poll(state, interval)
 
-        state = %{
-          state
-          | demand: demand,
-            buffer: buffer,
-            receive_timer: receive_timer,
-            acks: acks
-        }
+          state = %{
+            state
+            | demand: demand,
+              buffer: buffer,
+              receive_timer: receive_timer,
+              acks: acks
+          }
 
-        {:noreply, events, state}
+          {:noreply, events, state}
+      end
     end
   end
 
