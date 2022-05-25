@@ -737,14 +737,13 @@ defmodule BroadwayKafka.Producer do
       started_at = elem(state.revoke_caller, 1)
       finished_at = System.monotonic_time(:second)
 
-      rebalancing_timeout =
-        Keyword.get(state.config[:group_config], :rebalance_timeout_seconds, 30)
+      timeout = Keyword.get(state.config[:group_config], :rebalance_timeout_seconds, 30)
 
       diff = finished_at - started_at
 
-      if(diff > rebalancing_timeout) do
+      if(diff > timeout) do
         Logger.warn(
-          "#{state.client_id}: It took #{diff} seconds to commit the offsets while waiting for acks. You might need to adjust :rebalance_timeout_seconds option for you case."
+          "Committing offsets took #{diff} seconds, which is more than :rebalancing_timeout_seconds of #{timeout}s. This may cause your consumers to keep going into the rebalancing state. Please read the \"Consumer Rebalancing\" section in BroadwayKafka.Producer docs for more information"
         )
       end
     end
