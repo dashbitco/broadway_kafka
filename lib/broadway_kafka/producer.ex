@@ -165,25 +165,13 @@ defmodule BroadwayKafka.Producer do
   will reassign all its topic/partition to other available consumers, including any Broadway
   producer subscribed to the same topic.
 
-  ## Consumer Rebalancing
+  ## Consumer Group Rebalancing
 
-  If you are dealing with more than one partitions and have more than one node consuming the data, you'll
+  If you are dealing with more than one partitions and have more than one node consuming the data using the same consumer group, you'll
   find yourself in a situation which one node joining the consumer group causes other consumers to go to rebalancing mode
-  and depends on amount messages you are processing, it might take a long time until they go into the balance state.
-  In this case try to adjust:
-
-  * Producer's `concurrency` value: By increasing this value, you are dividing the partitions among more processors.
-
-  * ':rebalance_timeout_seconds` option: By increasing this value, you are telling Kafka's consumer group coordinator
-  to wait longer time for other member of a consumer group before triggering rebalance.
-
-
-  There is no one config fit all. Keep adjusting until it works for you.
-
-  Keep an eye on the logs and if the problem occurs, you'll see a log like this:
-  ```
-  [warning] Elixir.MyApp.Broadway.Broadway.Producer_0.Client: It took 40 seconds to commit the offsets while waiting for acks. You might need to adjust :rebalance_timeout_seconds option for you case
-  ```
+  and depends on amount of messages and the duration it takes to consume the messages, it might take a long time until they go into the balance state.
+  In this case try to adjust `:rebalance_timeout_seconds` option. By increasing this value, you are telling Kafka's consumer group coordinator
+  to wait longer time for other member of a consumer group to join.
 
   ## Handling failed messages
 
@@ -743,7 +731,7 @@ defmodule BroadwayKafka.Producer do
 
       if(diff > timeout) do
         Logger.warn(
-          "Committing offsets took #{diff} seconds, which is more than :rebalancing_timeout_seconds of #{timeout}s. This may cause your consumers to keep going into the rebalancing state. Please read the \"Consumer Rebalancing\" section in BroadwayKafka.Producer docs for more information"
+          "Committing offsets took #{diff} seconds, which is more than :rebalancing_timeout_seconds of #{timeout}s. This may cause your consumers to keep going into the rebalancing state. Please read the \"Consumer Group Rebalancing\" section in BroadwayKafka.Producer docs for more information"
         )
       end
     end
