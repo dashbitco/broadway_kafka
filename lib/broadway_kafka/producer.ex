@@ -273,8 +273,7 @@ defmodule BroadwayKafka.Producer do
           demand: 0,
           shutting_down?: false,
           buffer: :queue.new(),
-          max_demand: max_demand,
-          draining_after_revoke_started_at: nil
+          max_demand: max_demand
         }
 
         {:producer, connect(state)}
@@ -320,8 +319,7 @@ defmodule BroadwayKafka.Producer do
       {:noreply, [],
        %{
          state
-         | revoke_caller: from,
-           draining_after_revoke_started_at: System.monotonic_time(:second)
+         | revoke_caller: {from, System.monotonic_time(:second)}
        }}
     end
   end
@@ -423,14 +421,13 @@ defmodule BroadwayKafka.Producer do
     new_state =
       if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
         set_draining_after_revoke!(state.draining_after_revoke_flag, false)
-        GenStage.reply(state.revoke_caller, :ok)
+        GenStage.reply(elem(state.revoke_caller, 0), :ok)
         log_potential_rebalancing_warning(state)
 
         %{
           state
           | revoke_caller: nil,
-            acks: Acknowledger.new(),
-            draining_after_revoke_started_at: nil
+            acks: Acknowledger.new()
         }
       else
         %{state | acks: updated_acks}
@@ -736,13 +733,14 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp log_potential_rebalancing_warning(state) do
-    if state.draining_after_revoke_started_at do
+    if state.revoke_caller do
+      started_at = elem(state.revoke_caller, 1)
       finished_at = System.monotonic_time(:second)
 
       rebalancing_timeout =
         Keyword.get(state.config[:group_config], :rebalance_timeout_seconds, 30)
 
-      diff = finished_at - state.draining_after_revoke_started_at
+      diff = finished_at - started_at
 
       if(diff > rebalancing_timeout) do
         Logger.warn(
