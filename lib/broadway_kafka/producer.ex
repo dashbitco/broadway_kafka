@@ -731,7 +731,9 @@ defmodule BroadwayKafka.Producer do
 
       if(diff > timeout) do
         Logger.warn(
-          "Committing offsets took #{diff} seconds, which is more than :rebalancing_timeout_seconds of #{timeout}s. This may cause your consumers to keep going into the rebalancing state. Please read the \"Consumer Group Rebalancing\" section in BroadwayKafka.Producer docs for more information"
+          "Committing offsets took #{diff} seconds, which is more than :rebalancing_timeout_seconds of #{
+            timeout
+          }s. This may cause your consumers to keep going into the rebalancing state. Please read the \"Consumer Group Rebalancing\" section in BroadwayKafka.Producer docs for more information"
         )
       end
     end
