@@ -1,6 +1,6 @@
 defmodule BroadwayKafka.ConsumerTest.Config do
   def n_messages do
-    10_000
+    100_000
   end
 
   def last_messages do
@@ -19,24 +19,24 @@ defmodule BroadwayKafka.ConsumerTest do
   ```
   version: '3.9'
   services:
-  zookeeper:
-    image: wurstmeister/zookeeper
-    ports:
-      - "127.0.0.1:2181:2181"
-  kafka:
-    image: wurstmeister/kafka:2.13-2.7.1
-    ports:
-      - "127.0.0.1:9092:9092"
-    environment:
-      KAFKA_LISTENERS: "INTERNAL://:29092,EXTERNAL://:9092"
-      KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
-      KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
-    depends_on:
-      - zookeeper
+    zookeeper:
+      image: wurstmeister/zookeeper
+      ports:
+        - "127.0.0.1:2181:2181"
+    kafka:
+      image: wurstmeister/kafka:2.13-2.7.1
+      ports:
+        - "127.0.0.1:9092:9092"
+      environment:
+        KAFKA_LISTENERS: "INTERNAL://:29092,EXTERNAL://:9092"
+        KAFKA_ADVERTISED_LISTENERS: "INTERNAL://kafka:29092,EXTERNAL://localhost:9092"
+        KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT"
+        KAFKA_INTER_BROKER_LISTENER_NAME: "INTERNAL"
+        KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      volumes:
+        - /var/run/docker.sock:/var/run/docker.sock
+      depends_on:
+        - zookeeper
   ```
 
   1. Run Docker
