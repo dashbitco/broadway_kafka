@@ -1,6 +1,6 @@
 defmodule BroadwayKafka.ConsumerTest.Config do
   def n_messages do
-    100_000
+    10_000
   end
 
   def last_messages do
