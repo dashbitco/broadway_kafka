@@ -252,7 +252,8 @@ defmodule BroadwayKafka.Producer do
           draining_after_revoke_flag: draining_after_revoke_flag,
           demand: 0,
           shutting_down?: false,
-          buffer: :queue.new(),
+          buffers: %{},
+          buffer_index: 0,
           max_demand: max_demand
         }
 
@@ -308,7 +309,7 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_info({:poll, key}, %{acks: acks, demand: demand, max_demand: max_demand} = state) do
+  def handle_info({:poll, key}, %{acks: acks} = state) do
     # We only poll if:
     #
     #   1. We are not shutting down
@@ -323,13 +324,10 @@ defmodule BroadwayKafka.Producer do
          not is_draining_after_revoke?(state.draining_after_revoke_flag) and
          offset != nil do
       messages = fetch_messages_from_kafka(state, key, offset)
-      to_send = min(demand, max_demand)
-      {new_acks, not_sent, messages, pending} = split_demand(messages, acks, key, to_send)
-      new_buffer = enqueue_many(state.buffer, key, pending)
+      new_buffers = enqueue_many(state.buffers, key, messages)
 
-      new_demand = demand - to_send + not_sent
-      new_state = %{state | acks: new_acks, demand: new_demand, buffer: new_buffer}
-      {:noreply, messages, new_state}
+      new_state = %{state | buffers: new_buffers}
+      {:noreply, [], new_state}
     else
       {:noreply, [], state}
     end
@@ -364,6 +362,13 @@ defmodule BroadwayKafka.Producer do
         {group_generation_id, topic, partition, offset}
       end)
 
+    buffers =
+      list
+      |> Enum.map(fn {group_generation_id, topic, partition, _} ->
+        {{group_generation_id, topic, partition}, :queue.new()}
+      end)
+      |> Map.new()
+
     topics_partitions = Enum.map(list, fn {_, topic, partition, _} -> {topic, partition} end)
     {broadway_index, processors_allocators, batchers_allocators} = state.allocator_names
 
@@ -375,7 +380,7 @@ defmodule BroadwayKafka.Producer do
       Allocator.allocate(allocator_name, broadway_index, topics_partitions)
     end
 
-    {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list)}}
+    {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list), buffers: buffers}}
   end
 
   @impl GenStage
@@ -524,30 +529,70 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp maybe_schedule_poll(state, interval) do
-    %{buffer: buffer, demand: demand, acks: acks, receive_timer: receive_timer} = state
+    %{
+      buffers: buffers,
+      demand: demand,
+      max_demand: max_demand,
+      acks: acks,
+      receive_timer: receive_timer
+    } = state
 
-    case dequeue_many(buffer, acks, demand, []) do
-      {acks, 0, events, buffer} ->
-        {:noreply, events, %{state | demand: 0, buffer: buffer, acks: acks}}
+    {key, next_queue, next_index} = find_next_queue(buffers, state.buffer_index)
 
-      {acks, demand, events, buffer} ->
-        receive_timer = receive_timer || schedule_poll(state, interval)
+    num_to_dequeue = min(demand, max_demand)
+    {updated_queue, acks, events} = dequeue_many(next_queue, acks, key, num_to_dequeue, [])
+    buffers = put_queue(buffers, key, updated_queue)
+    new_demand = demand - length(events)
 
-        state = %{
-          state
-          | demand: demand,
-            buffer: buffer,
-            receive_timer: receive_timer,
-            acks: acks
-        }
+    receive_timer =
+      if new_demand > 0 do
+        receive_timer || schedule_poll(state, interval)
+      else
+        receive_timer
+      end
 
-        {:noreply, events, state}
+    state = %{
+      state
+      | receive_timer: receive_timer,
+        buffer_index: next_index,
+        acks: acks,
+        buffers: buffers,
+        demand: new_demand
+    }
+
+    {:noreply, events, state}
+  end
+
+  defp find_next_queue(queues, buffer_index) do
+    keys = Map.keys(queues)
+    key = Enum.at(keys, buffer_index)
+
+    next_index =
+      if buffer_index + 1 <= length(keys) do
+        buffer_index + 1
+      else
+        0
+      end
+
+    queue = get_queue(queues, key)
+
+    cond do
+      buffer_index == 0 ->
+        {key, queue, next_index}
+
+      :queue.is_empty(queue) ->
+        find_next_queue(queues, next_index)
+
+      true ->
+        {key, queue, next_index}
     end
   end
 
   defp schedule_poll(state, interval) do
     for key <- Acknowledger.keys(state.acks) do
-      Process.send_after(self(), {:poll, key}, interval)
+      if :queue.is_empty(get_queue(state.buffers, key)) do
+        Process.send_after(self(), {:poll, key}, interval)
+      end
     end
 
     Process.send_after(self(), :maybe_schedule_poll, interval)
@@ -639,48 +684,36 @@ defmodule BroadwayKafka.Producer do
     end
   end
 
-  ## Buffer handling
+  defp enqueue_many(queues, _key, []), do: queues
 
-  defp split_demand(list, acks, key, demand) do
-    {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], [])
-    acks = update_last_offset(acks, key, reversed)
-    {acks, demand, Enum.reverse(acc), rest}
+  defp enqueue_many(queues, key, list) do
+    queue = get_queue(queues, key)
+    queue = Enum.reduce(list, queue, &:queue.in(&1, &2))
+    Map.put(queues, key, queue)
   end
 
-  defp reverse_split_demand(rest, 0, reversed, acc) do
-    {rest, 0, reversed, acc}
+  defp dequeue_many(queue, acks, nil, _, acc) do
+    {queue, acks, acc}
   end
 
-  defp reverse_split_demand([], demand, reversed, acc) do
-    {[], demand, reversed, acc}
+  defp dequeue_many(queue, acks, key, num_to_dequeue, acc) when num_to_dequeue > 0 do
+    {queue, acc} = dequeue_many_from(queue, num_to_dequeue, acc)
+    acks = update_last_offset(acks, key, acc)
+    {queue, acks, Enum.reverse(acc)}
   end
 
-  defp reverse_split_demand([head | tail], demand, reversed, acc) do
-    reverse_split_demand(tail, demand - 1, [head | reversed], [head | acc])
+  def dequeue_many_from(queue, 0, acc) do
+    {queue, acc}
   end
 
-  defp enqueue_many(queue, _key, []), do: queue
-  defp enqueue_many(queue, key, list), do: :queue.in({key, list}, queue)
-
-  defp dequeue_many(queue, acks, demand, acc) when demand > 0 do
+  def dequeue_many_from(queue, num_to_dequeue, acc) do
     case :queue.out(queue) do
-      {{:value, {key, list}}, queue} ->
-        {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], acc)
-        acks = update_last_offset(acks, key, reversed)
-
-        case {demand, rest} do
-          {0, []} ->
-            {acks, demand, Enum.reverse(acc), queue}
-
-          {0, _} ->
-            {acks, demand, Enum.reverse(acc), :queue.in_r({key, rest}, queue)}
-
-          {_, []} ->
-            dequeue_many(queue, acks, demand, acc)
-        end
+      {{:value, message}, queue} ->
+        acc = [message | acc]
+        dequeue_many_from(queue, num_to_dequeue - 1, acc)
 
       {:empty, queue} ->
-        {acks, demand, Enum.reverse(acc), queue}
+        {queue, acc}
     end
   end
 
@@ -695,7 +728,7 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp reset_buffer(state) do
-    put_in(state.buffer, :queue.new())
+    put_in(state.buffers, %{})
   end
 
   defp schedule_reconnect(timeout) do
@@ -723,4 +756,11 @@ defmodule BroadwayKafka.Producer do
   defp is_draining_after_revoke?(table_name) do
     :ets.lookup_element(table_name, :draining, 2)
   end
+
+  defp get_queue(queues, key) do
+    Map.get_lazy(queues, key, fn -> :queue.new() end)
+  end
+
+  defp put_queue(queues, nil, _), do: queues
+  defp put_queue(queues, key, value), do: Map.put(queues, key, value)
 end
