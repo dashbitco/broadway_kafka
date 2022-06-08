@@ -406,6 +406,16 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], new_state}
   end
 
+  @impl GenStage
+  def handle_info({:no_ack, key, offset}, state) do
+    %{group_coordinator: _group_coordinator, client: _client, acks: acks, config: _config} = state
+    %{^key => {_pending, last, seen}} = acks
+
+    new_offset = Enum.min([last, offset])
+
+    {:noreply, [], %{state | acks: %{key => {[], new_offset, seen}}}}
+  end
+
   def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do
     state.client.stop_group_coordinator(state.group_coordinator)
     state = reset_buffer(state)

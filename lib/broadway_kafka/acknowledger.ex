@@ -123,10 +123,27 @@ defmodule BroadwayKafka.Acknowledger do
   @doc """
   The ack callback. It simply sends messages to the annotated producer.
   """
-  def ack({producer_pid, key}, successful, failed) do
-    offsets =
-      Enum.map(successful ++ failed, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
+
+  # This is the original function.
+  # def ack({producer_pid, key}, successful, failed) do
+  #   offsets =
+  #     Enum.map(successful ++ failed, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
+
+  #   send(producer_pid, {:ack, key, Enum.sort(offsets)})
+  # end
+
+  def ack({producer_pid, key}, successful, []) do
+    offsets = Enum.map(successful, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
 
     send(producer_pid, {:ack, key, Enum.sort(offsets)})
+  end
+
+  def ack({producer_pid, key}, _successful_messages, failed_messages) do
+    last_offset =
+      failed_messages
+      |> Enum.map(fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
+      |> Enum.min()
+
+    send(producer_pid, {:no_ack, key, last_offset})
   end
 end
