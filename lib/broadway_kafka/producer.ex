@@ -409,8 +409,10 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
+  def handle_info({:ack, key, offsets, []}, state), do: handle_info({:ack, key, offsets}, state)
+
   def handle_info({:ack, key, offsets, failed_offsets}, state) do
-    %{group_coordinator: _group_coordinator, client: _client, acks: acks, config: config} = state
+    %{acks: acks, config: config} = state
 
     if config.retry_on_failure do
       %{^key => {_pending, last_offset, seen}} = acks
