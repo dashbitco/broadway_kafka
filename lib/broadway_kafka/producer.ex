@@ -43,6 +43,8 @@ defmodule BroadwayKafka.Producer do
       offset in Kafka or if the current offset has expired. Possible values are `:earliest` or
       `:latest`. Default is `:latest`.
 
+    * `:retry_on_failure` - Optional.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
       options.
@@ -407,13 +409,19 @@ defmodule BroadwayKafka.Producer do
   end
 
   @impl GenStage
-  def handle_info({:no_ack, key, offset}, state) do
-    %{group_coordinator: _group_coordinator, client: _client, acks: acks, config: _config} = state
-    %{^key => {_pending, last, seen}} = acks
+  def handle_info({:ack, key, offsets, failed_offsets}, state) do
+    %{group_coordinator: _group_coordinator, client: _client, acks: acks, config: config} = state
 
-    new_offset = Enum.min([last, offset])
+    if config.retry_on_failure do
+      %{^key => {_pending, last_offset, seen}} = acks
 
-    {:noreply, [], %{state | acks: %{key => {[], new_offset, seen}}}}
+      min_failed_offset = Enum.min(failed_offsets)
+      new_offset = Enum.min([last_offset, min_failed_offset])
+
+      {:noreply, [], %{state | acks: %{key => {[], new_offset, seen}}}}
+    else
+      handle_info({:ack, key, offsets}, state)
+    end
   end
 
   def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do

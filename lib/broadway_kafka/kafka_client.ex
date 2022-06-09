@@ -7,6 +7,7 @@ defmodule BroadwayKafka.KafkaClient do
            group_id: :brod.group_id(),
            reconnect_timeout: non_neg_integer,
            offset_commit_on_ack: boolean,
+           retry_on_failure: boolean,
            topics: [:brod.topic()],
            group_config: keyword,
            client_config: keyword

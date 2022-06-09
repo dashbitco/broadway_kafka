@@ -123,27 +123,20 @@ defmodule BroadwayKafka.Acknowledger do
   @doc """
   The ack callback. It simply sends messages to the annotated producer.
   """
+  @spec ack({pid, key}, [Broadway.Message.t()], [Broadway.Message.t()]) ::
+          {:ack, key, [non_neg_integer], [non_neg_integer]}
+  def ack({producer_pid, key}, successful, failed) do
+    successful_offsets = fetch_offsets(successful)
+    failed_offsets = fetch_offsets(failed)
 
-  # This is the original function.
-  # def ack({producer_pid, key}, successful, failed) do
-  #   offsets =
-  #     Enum.map(successful ++ failed, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
+    offsets = successful_offsets ++ failed_offsets
 
-  #   send(producer_pid, {:ack, key, Enum.sort(offsets)})
-  # end
-
-  def ack({producer_pid, key}, successful, []) do
-    offsets = Enum.map(successful, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
-
-    send(producer_pid, {:ack, key, Enum.sort(offsets)})
+    send(producer_pid, {:ack, key, Enum.sort(offsets), Enum.sort(failed_offsets)})
   end
 
-  def ack({producer_pid, key}, _successful_messages, failed_messages) do
-    last_offset =
-      failed_messages
-      |> Enum.map(fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
-      |> Enum.min()
+  @spec fetch_offsets([Broadway.Message.t()]) :: [non_neg_integer]
+  defp fetch_offsets([]), do: []
 
-    send(producer_pid, {:no_ack, key, last_offset})
-  end
+  defp fetch_offsets(messages),
+    do: Enum.map(messages, fn %{acknowledger: {_, _, %{offset: offset}}} -> offset end)
 end
