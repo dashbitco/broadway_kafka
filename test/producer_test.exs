@@ -125,6 +125,10 @@ defmodule BroadwayKafka.ProducerTest do
   defmodule Forwarder do
     use Broadway
 
+    def handle_message(_, %Broadway.Message{data: "failed"} = message, %{test_pid: _test_pid}) do
+      Broadway.Message.failed(message, "this message failed")
+    end
+
     def handle_message(_, message, %{test_pid: test_pid}) do
       meta = message.metadata
 
@@ -606,11 +610,32 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "with :retry_on_failure, retries from the failed offset" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, retry_on_failure: true)
+
+    producer = get_producer(pid)
+    put_assignments(producer, [[topic: "topic", partition: 0]])
+
+    assert_receive {:messages_fetched, 0}
+
+    MessageServer.push_messages(message_server, ["success", "failed"],
+      topic: "topic",
+      partition: 0
+    )
+
+    assert_receive {:messages_fetched, 2}
+    assert_receive {:messages_fetched, 1}
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_concurrency = Keyword.get(opts, :producers_concurrency, 1)
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
+    retry_on_failure = Keyword.get(opts, :retry_on_failure, false)
 
     batchers =
       if batchers_concurrency do
@@ -634,7 +659,8 @@ defmodule BroadwayKafka.ProducerTest do
                receive_interval: 0,
                reconnect_timeout: 10,
                max_bytes: 10,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               retry_on_failure: retry_on_failure
              ]},
           concurrency: producers_concurrency
         ],
