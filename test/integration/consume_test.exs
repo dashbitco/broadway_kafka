@@ -177,7 +177,18 @@ defmodule BroadwayKafka.ConsumerTest do
       }
     ]
 
-    :brod.create_topics(brokers, topic_config, %{timeout: 1_000})
+    wait_until_create_topic(brokers, topic_config, %{timeout: 1_000})
+  end
+
+  defp wait_until_create_topic(brokers, topic_config, opts) do
+    case :brod.create_topics(brokers, topic_config, opts) do
+      :ok ->
+        :ok
+
+      _error ->
+        Process.sleep(10)
+        wait_until_create_topic(brokers, topic_config, opts)
+    end
   end
 
   defp send_messages(n_messages, hosts, topic) do
