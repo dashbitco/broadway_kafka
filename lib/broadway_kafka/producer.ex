@@ -568,10 +568,10 @@ defmodule BroadwayKafka.Producer do
     key = Enum.at(keys, buffer_index)
 
     next_index =
-      if buffer_index + 1 <= length(keys) do
-        buffer_index + 1
-      else
+      if buffer_index == length(keys) do
         0
+      else
+        buffer_index + 1
       end
 
     queue = get_queue(queues, key)
