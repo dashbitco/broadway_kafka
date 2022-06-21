@@ -315,6 +315,17 @@ defmodule BroadwayKafka.BrodClientTest do
                 ]
               }} = BrodClient.init(opts)
     end
+
+    test ":query_api_versions is an optional boolean" do
+      opts = put_in(@opts, [:client_config, :query_api_versions], "true")
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :query_api_versions to be a boolean, got: \"true\""}
+
+      opts = put_in(@opts, [:client_config, :query_api_versions], false)
+
+      assert {:ok, %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
+    end
   end
 
   defmodule FakeSaslMechanismPlugin do

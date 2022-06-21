@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+  * Allow `:query_api_versions` option to be set in the `client_config`. 
+
 ## v0.3.5 (2022-05-12)
 
   * Do not send more messages per partition than `max_demand`
