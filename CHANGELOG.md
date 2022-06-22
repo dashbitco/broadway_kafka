@@ -1,8 +1,11 @@
 # Changelog
 
-## Unreleased
+## v0.3.6 (2022-06-22)
 
-  * Allow `:query_api_versions` option to be set in the `client_config`. 
+  * Do not poll while draining
+  * Properly shutdown Brod's group coordinators
+  * Support `:rebalance_timeout_seconds` option
+  * Support `:query_api_versions` option
 
 ## v0.3.5 (2022-05-12)
 
