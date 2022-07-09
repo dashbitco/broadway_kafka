@@ -190,6 +190,15 @@ defmodule BroadwayKafka.Producer do
     * `ts` - A timestamp associated with the message.
 
     * `headers` - The headers of the message.
+
+  ## Telemetry
+
+  This producer emits a few [Telemetry](https://github.com/beam-telemetry/telemetry)
+  events which are listed below.
+
+    * `[:broadway_kafka, :assignments_revoked, :start | :stop | :exception]` spans -
+      these events are emitted in "span style" when receiving assignments revoked call from consumer group coordinator 
+      See `:telemetry.span/3`.
   """
 
   use GenStage
@@ -507,8 +516,12 @@ defmodule BroadwayKafka.Producer do
     |> drain_after_revoke_table_name!()
     |> set_draining_after_revoke!(true)
 
-    GenStage.call(producer_pid, :drain_after_revoke, :infinity)
-    :ok
+    metadata = %{producer: maybe_process_name.(producer_pid)}
+
+    :telemetry.span([:broadway_kafka, :assignments_revoked], metadata, fn ->
+      GenStage.call(producer_pid, :drain_after_revoke, :infinity)
+      {:ok, metadata}
+    end)
   end
 
   @impl GenStage

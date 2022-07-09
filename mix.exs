@@ -28,6 +28,7 @@ defmodule BroadwayKafka.MixProject do
     [
       {:broadway, "~> 1.0"},
       {:brod, "~> 3.16"},
+      {:telemetry, "~> 0.4.3 or ~> 1.0"},
       {:ex_doc, ">= 0.19.0", only: :docs}
     ]
   end
