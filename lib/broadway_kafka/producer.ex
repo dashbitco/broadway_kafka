@@ -673,7 +673,7 @@ defmodule BroadwayKafka.Producer do
             {acks, demand, Enum.reverse(acc), queue}
 
           {0, _} ->
-            {acks, demand, Enum.reverse(acc), :queue.in_r({key, rest}, queue)}
+            {acks, demand, Enum.reverse(acc), :queue.in({key, rest}, queue)}
 
           {_, []} ->
             dequeue_many(queue, acks, demand, acc)
