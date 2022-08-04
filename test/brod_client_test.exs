@@ -320,7 +320,8 @@ defmodule BroadwayKafka.BrodClientTest do
       opts = put_in(@opts, [:client_config, :request_timeout], "5000")
 
       assert BrodClient.init(opts) ==
-               {:error, "expected :request_timeout to be a positive integer >= 1000, got: \"5000\""}
+               {:error,
+                "expected :request_timeout to be a positive integer >= 1000, got: \"5000\""}
 
       opts = put_in(@opts, [:client_config, :request_timeout], 300)
 
