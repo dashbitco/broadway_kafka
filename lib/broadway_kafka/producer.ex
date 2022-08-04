@@ -126,6 +126,9 @@ defmodule BroadwayKafka.Producer do
     * `:connect_timeout` - Optional. Time in milliseconds to be used as a timeout for `:brod`'s communication with Kafka.
     Default is to use `:brod`'s default timeout which is currently 5 seconds.
 
+    * `:request_timeout` - Optional. Time in milliseconds to be used as a timeout for waiting response from Kafka.
+    Default is to use `:brod`'s default timeout which is currently 240 seconds.
+
   > **Note**: Currently, Broadway does not support all options provided by `:brod`. If you
   have a scenario where you need any extra option that is not listed above, please open an
   issue, so we can consider adding it.
@@ -197,7 +200,7 @@ defmodule BroadwayKafka.Producer do
   events which are listed below.
 
     * `[:broadway_kafka, :assignments_revoked, :start | :stop | :exception]` spans -
-      these events are emitted in "span style" when receiving assignments revoked call from consumer group coordinator 
+      these events are emitted in "span style" when receiving assignments revoked call from consumer group coordinator
       See `:telemetry.span/3`.
   """
 

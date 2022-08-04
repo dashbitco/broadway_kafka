@@ -27,6 +27,7 @@ defmodule BroadwayKafka.BrodClient do
     :ssl,
     :sasl,
     :connect_timeout,
+    :request_timeout,
     :client_id_prefix,
     :query_api_versions
   ]
@@ -293,6 +294,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:connect_timeout, value) when not is_integer(value) or value < 1,
     do: validation_error(:connect_timeout, "a positive integer", value)
 
+  defp validate_option(:request_timeout, value) when not is_integer(value) or value < 1000,
+    do: validation_error(:request_timeout, "a positive integer >= 1000", value)
+
   defp validate_option(_, value), do: {:ok, value}
 
   defp validation_error(option, expected, value) do
@@ -328,6 +332,7 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, _} <- validate(config, :sasl),
          {:ok, _} <- validate(config, :ssl),
          {:ok, _} <- validate(config, :connect_timeout),
+         {:ok, _} <- validate(config, :request_timeout),
          {:ok, _} <- validate(config, :query_api_versions) do
       {:ok, config}
     end
