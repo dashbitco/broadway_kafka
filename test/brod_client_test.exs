@@ -316,6 +316,27 @@ defmodule BroadwayKafka.BrodClientTest do
               }} = BrodClient.init(opts)
     end
 
+    test ":request_timeout is an optional positive integer >= 1000" do
+      opts = put_in(@opts, [:client_config, :request_timeout], "5000")
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :request_timeout to be a positive integer >= 1000, got: \"5000\""}
+
+      opts = put_in(@opts, [:client_config, :request_timeout], 300)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :request_timeout to be a positive integer >= 1000, got: 300"}
+
+      opts = put_in(@opts, [:client_config, :request_timeout], 5000)
+
+      assert {:ok,
+              %{
+                client_config: [
+                  request_timeout: 5000
+                ]
+              }} = BrodClient.init(opts)
+    end
+
     test ":query_api_versions is an optional boolean" do
       opts = put_in(@opts, [:client_config, :query_api_versions], "true")
 
