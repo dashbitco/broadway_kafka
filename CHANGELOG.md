@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.4.0 (2022-08-23)
+
+  * Implement fairer distribution of messages across partitions
+  * Add :request_timeout option to BrodClient
+  * Send telemetry when assignments_revoked is executed
+
 ## v0.3.6 (2022-06-22)
 
   * Do not poll while draining

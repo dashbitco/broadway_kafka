@@ -1,7 +1,7 @@
 defmodule BroadwayKafka.MixProject do
   use Mix.Project
 
-  @version "0.3.6"
+  @version "0.4.0"
   @description "A Kafka connector for Broadway"
 
   def project do
