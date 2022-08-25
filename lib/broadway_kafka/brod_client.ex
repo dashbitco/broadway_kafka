@@ -141,6 +141,10 @@ defmodule BroadwayKafka.BrodClient do
 
         {:error, :offset_out_of_range} ->
           lookup_offset(config.hosts, topic, partition, policy, config.client_config)
+
+        {:error, reason} ->
+          raise "cannot resolve offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
+                  "partition=#{partition}). Reason: #{inspect(reason)}"
       end
     end
   end
