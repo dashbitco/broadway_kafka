@@ -221,6 +221,24 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_wait_time] == 3
     end
 
+    test ":begin_offset is optional non-negative integer or :latest" do
+      opts = put_in(@opts, [:fetch_config, :begin_offset], -1)
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :begin_offset to be a positive integer, got: -1"}
+
+      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(@opts)
+      assert not Map.has_key?(fetch_config, :begin_offset)
+
+      opts = put_in(@opts, [:fetch_config, :begin_offset], 3)
+      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      assert fetch_config[:begin_offset] == 3
+
+      opts = put_in(@opts, [:fetch_config, :begin_offset], :latest)
+      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      assert fetch_config[:begin_offset] == :latest
+    end
+
     test ":client_id_prefix is an optional atom value" do
       opts = put_in(@opts, [:client_config, :client_id_prefix], :wrong_type)
 
