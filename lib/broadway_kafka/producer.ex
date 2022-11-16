@@ -399,7 +399,14 @@ defmodule BroadwayKafka.Producer do
 
     if new_offset do
       try do
-        client.ack(group_coordinator, generation_id, topic, partition, new_offset, config)
+        client.ack(
+          group_coordinator,
+          generation_id,
+          topic,
+          partition,
+          new_offset,
+          disable_offset_commit_during_revoke_call(config, state.revoke_caller)
+        )
       catch
         kind, reason ->
           Logger.error(Exception.format(kind, reason, __STACKTRACE__))
@@ -738,5 +745,9 @@ defmodule BroadwayKafka.Producer do
 
   defp is_draining_after_revoke?(table_name) do
     :ets.lookup_element(table_name, :draining, 2)
+  end
+
+  defp disable_offset_commit_during_revoke_call(config, revoke_caller) do
+    %{config | offset_commit_on_ack: !revoke_caller && config.offset_commit_on_ack}
   end
 end
