@@ -169,11 +169,11 @@ defmodule BroadwayKafka.ConsumerTest do
 
     topic_config = [
       %{
-        config_entries: [],
         num_partitions: 3,
-        replica_assignment: [],
         replication_factor: 1,
-        topic: topic
+        name: topic,
+        assignments: [],
+        configs: []
       }
     ]
 
