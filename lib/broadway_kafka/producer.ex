@@ -405,7 +405,7 @@ defmodule BroadwayKafka.Producer do
           topic,
           partition,
           new_offset,
-          disable_offset_commit_during_revoke_call(config, state.revoke_caller)
+          disable_offset_commit_during_revoke_call(config, state)
         )
       catch
         kind, reason ->
@@ -747,7 +747,11 @@ defmodule BroadwayKafka.Producer do
     :ets.lookup_element(table_name, :draining, 2)
   end
 
-  defp disable_offset_commit_during_revoke_call(config, revoke_caller) do
-    %{config | offset_commit_on_ack: !revoke_caller && config.offset_commit_on_ack}
+  defp disable_offset_commit_during_revoke_call(config, state) do
+    offset_commit_on_ack =
+      not is_draining_after_revoke?(state.draining_after_revoke_flag) and
+        state.config.offset_commit_on_ack
+
+    %{config | offset_commit_on_ack: offset_commit_on_ack}
   end
 end
