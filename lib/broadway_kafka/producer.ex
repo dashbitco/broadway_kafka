@@ -748,10 +748,10 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp disable_offset_commit_during_revoke_call(config, state) do
-    draining? =
-      state.revoke_caller != nil or is_draining_after_revoke?(state.draining_after_revoke_flag)
+    offset_commit_on_ack =
+      not is_draining_after_revoke?(state.draining_after_revoke_flag) and
+        state.config.offset_commit_on_ack
 
-    offset_commit_on_ack = not draining? and state.config.offset_commit_on_ack
     %{config | offset_commit_on_ack: offset_commit_on_ack}
   end
 end
