@@ -53,7 +53,8 @@ defmodule BroadwayKafka.ProducerTest do
       end
 
       send(config[:test_pid], {:setup, client_id})
-      {:ok, :fake_coord}
+      {pid, ref} = spawn_monitor(fn -> Process.sleep(:infinity) end)
+      {:ok, pid, ref}
     end
 
     @impl true
@@ -99,11 +100,6 @@ defmodule BroadwayKafka.ProducerTest do
         end
 
       connected?
-    end
-
-    @impl true
-    def stop_group_coordinator(_pid) do
-      :ok
     end
 
     @impl true

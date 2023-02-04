@@ -82,9 +82,9 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
-      Process.monitor(group_coordinator)
+      ref = Process.monitor(group_coordinator)
       Process.unlink(group_coordinator)
-      {:ok, group_coordinator}
+      {:ok, group_coordinator, ref}
     end
   end
 
@@ -112,15 +112,6 @@ defmodule BroadwayKafka.BrodClient do
       _type, _reason ->
         false
     end
-  end
-
-  @impl true
-  def stop_group_coordinator(nil) do
-    :ok
-  end
-
-  def stop_group_coordinator(group_coordinator) do
-    :brod_group_coordinator.stop(group_coordinator)
   end
 
   @impl true

@@ -426,7 +426,14 @@ defmodule BroadwayKafka.Producer do
   end
 
   def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do
-    state.client.stop_group_coordinator(state.group_coordinator)
+    if coord = state.group_coordinator do
+      Process.exit(coord, :shutdown)
+
+      receive do
+        {:DOWN, _, _, ^coord, _} -> :ok
+      end
+    end
+
     state = reset_buffer(state)
     schedule_reconnect(state.reconnect_timeout)
 
@@ -537,7 +544,7 @@ defmodule BroadwayKafka.Producer do
   @impl GenStage
   def terminate(_reason, state) do
     %{client: client, group_coordinator: group_coordinator, client_id: client_id} = state
-    client.stop_group_coordinator(group_coordinator)
+    group_coordinator && Process.exit(group_coordinator, :shutdown)
     client.disconnect(client_id)
     :ok
   end
@@ -623,8 +630,8 @@ defmodule BroadwayKafka.Producer do
     %{client: client, client_id: client_id, config: config} = state
 
     case client.setup(self(), client_id, __MODULE__, config) do
-      {:ok, group_coordinator} ->
-        %{state | group_coordinator: group_coordinator}
+      {:ok, coord_pid, _coord_ref} ->
+        %{state | group_coordinator: coord_pid}
 
       error ->
         raise "Cannot connect to Kafka. Reason #{inspect(error)}"
