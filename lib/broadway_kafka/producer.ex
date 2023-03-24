@@ -300,7 +300,6 @@ defmodule BroadwayKafka.Producer do
     {:reply, :ok, [], state}
   end
 
-  @impl GenStage
   def handle_call(:drain_after_revoke, from, %{revoke_caller: nil} = state) do
     state = reset_buffer(state)
 
@@ -347,12 +346,10 @@ defmodule BroadwayKafka.Producer do
     end
   end
 
-  @impl GenStage
   def handle_info(:maybe_schedule_poll, state) do
     maybe_schedule_poll(%{state | receive_timer: nil}, state.receive_interval)
   end
 
-  @impl GenStage
   def handle_info({:put_assignments, group_generation_id, assignments}, state) do
     list =
       Enum.map(assignments, fn assignment ->
@@ -390,7 +387,6 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], %{state | acks: Acknowledger.add(state.acks, list)}}
   end
 
-  @impl GenStage
   def handle_info({:ack, key, offsets}, state) do
     %{group_coordinator: group_coordinator, client: client, acks: acks, config: config} = state
     {generation_id, topic, partition} = key
@@ -451,7 +447,6 @@ defmodule BroadwayKafka.Producer do
     {:noreply, [], state}
   end
 
-  @impl GenStage
   def handle_info(:reconnect, state) do
     if state.client.connected?(state.client_id) do
       {:noreply, [], connect(state)}
@@ -461,7 +456,6 @@ defmodule BroadwayKafka.Producer do
     end
   end
 
-  @impl GenStage
   def handle_info(_, state) do
     {:noreply, [], state}
   end
