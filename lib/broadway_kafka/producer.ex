@@ -424,10 +424,6 @@ defmodule BroadwayKafka.Producer do
   def handle_info({:DOWN, _ref, _, {client_id, _}, _reason}, %{client_id: client_id} = state) do
     if coord = state.group_coordinator do
       Process.exit(coord, :shutdown)
-
-      receive do
-        {:DOWN, _, _, ^coord, _} -> :ok
-      end
     end
 
     state = reset_buffer(state)
