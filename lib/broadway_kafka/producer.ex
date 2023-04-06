@@ -212,6 +212,7 @@ defmodule BroadwayKafka.Producer do
   alias Broadway.{Message, Acknowledger, Producer}
   alias BroadwayKafka.Allocator
   alias BroadwayKafka.Acknowledger
+  alias BroadwayKafka.Producer.Buffer
 
   @behaviour Producer
   @behaviour :brod_group_member
@@ -264,7 +265,7 @@ defmodule BroadwayKafka.Producer do
           draining_after_revoke_flag: draining_after_revoke_flag,
           demand: 0,
           shutting_down?: false,
-          buffer: :queue.new(),
+          buffer: Buffer.new(),
           max_demand: max_demand
         }
 
@@ -336,7 +337,7 @@ defmodule BroadwayKafka.Producer do
       messages = fetch_messages_from_kafka(state, key, offset)
       to_send = min(demand, max_demand)
       {new_acks, not_sent, messages, pending} = split_demand(messages, acks, key, to_send)
-      new_buffer = enqueue_many(state.buffer, key, pending)
+      new_buffer = Buffer.enqueue_with_key(state.buffer, key, pending)
 
       new_demand = demand - to_send + not_sent
       new_state = %{state | acks: new_acks, demand: new_demand, buffer: new_buffer}
@@ -546,16 +547,20 @@ defmodule BroadwayKafka.Producer do
   defp maybe_schedule_poll(state, interval) do
     %{buffer: buffer, demand: demand, acks: acks, receive_timer: receive_timer} = state
 
-    case dequeue_many(buffer, acks, demand, []) do
-      {acks, 0, events, buffer} ->
+    case Buffer.dequeue(buffer, demand) do
+      {buffer, items, count} when count == demand ->
+        events = Enum.flat_map(items, &elem(&1, 1))
+        acks = update_acks(acks, items)
         {:noreply, events, %{state | demand: 0, buffer: buffer, acks: acks}}
 
-      {acks, demand, events, buffer} ->
+      {buffer, items, count} ->
         receive_timer = receive_timer || schedule_poll(state, interval)
+        acks = update_acks(acks, items)
+        events = Enum.flat_map(items, &elem(&1, 1))
 
         state = %{
           state
-          | demand: demand,
+          | demand: demand - count,
             buffer: buffer,
             receive_timer: receive_timer,
             acks: acks
@@ -563,6 +568,17 @@ defmodule BroadwayKafka.Producer do
 
         {:noreply, events, state}
     end
+  end
+
+  defp update_acks(acks, []) do
+    acks
+  end
+
+  defp update_acks(acks, [{key, items, last_item} | tail]) do
+    last = last_item.metadata.offset + 1
+    offsets = Enum.map(items, & &1.metadata.offset)
+    acks = Acknowledger.update_last_offset(acks, key, last, offsets)
+    update_acks(acks, tail)
   end
 
   defp schedule_poll(state, interval) do
@@ -677,31 +693,6 @@ defmodule BroadwayKafka.Producer do
 
   defp reverse_split_demand([head | tail], demand, reversed, acc) do
     reverse_split_demand(tail, demand - 1, [head | reversed], [head | acc])
-  end
-
-  defp enqueue_many(queue, _key, []), do: queue
-  defp enqueue_many(queue, key, list), do: :queue.in({key, list}, queue)
-
-  defp dequeue_many(queue, acks, demand, acc) when demand > 0 do
-    case :queue.out(queue) do
-      {{:value, {key, list}}, queue} ->
-        {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], acc)
-        acks = update_last_offset(acks, key, reversed)
-
-        case {demand, rest} do
-          {0, []} ->
-            {acks, demand, Enum.reverse(acc), queue}
-
-          {0, _} ->
-            {acks, demand, Enum.reverse(acc), :queue.in({key, rest}, queue)}
-
-          {_, []} ->
-            dequeue_many(queue, acks, demand, acc)
-        end
-
-      {:empty, queue} ->
-        {acks, demand, Enum.reverse(acc), queue}
-    end
   end
 
   defp update_last_offset(acks, key, [message | _] = reversed) do
