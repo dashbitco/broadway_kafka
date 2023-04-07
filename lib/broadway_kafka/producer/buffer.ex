@@ -26,14 +26,18 @@ defmodule BroadwayKafka.Producer.Buffer do
     :queue.new()
   end
 
-  @spec enqueue_with_key(t, key, list :: [Message.t()]) :: t
+  @spec enqueue_with_key(t, key, list :: [Message.t()], at :: :rear | :front) :: t
   @doc false
-  def enqueue_with_key(buffer, _key, []) do
+  def enqueue_with_key(buffer, _key, [], _at) do
     buffer
   end
 
-  def enqueue_with_key(buffer, key, list) do
-    :queue.in({key, list}, buffer)
+  def enqueue_with_key(buffer, key, list, at \\ :rear) do
+    if at == :rear do
+      :queue.in({key, list}, buffer)
+    else
+      :queue.in_r({key, list}, buffer)
+    end
   end
 
   @spec empty?(t) :: boolean

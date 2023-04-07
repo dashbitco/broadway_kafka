@@ -335,13 +335,15 @@ defmodule BroadwayKafka.Producer do
          not is_draining_after_revoke?(state.draining_after_revoke_flag) and
          offset != nil do
       messages = fetch_messages_from_kafka(state, key, offset)
-      to_send = min(demand, max_demand)
-      {new_acks, not_sent, messages, pending} = split_demand(messages, acks, key, to_send)
-      new_buffer = Buffer.enqueue_with_key(state.buffer, key, pending)
 
-      new_demand = demand - to_send + not_sent
+      to_send = min(demand, max_demand)
+
+      {new_buffer, new_acks, events, count} =
+        pick_items_and_enqueue_rest(state.buffer, acks, key, messages, to_send)
+
+      new_demand = demand - count
       new_state = %{state | acks: new_acks, demand: new_demand, buffer: new_buffer}
-      {:noreply, messages, new_state}
+      {:noreply, events, new_state}
     else
       {:noreply, [], state}
     end
@@ -550,12 +552,12 @@ defmodule BroadwayKafka.Producer do
     case Buffer.dequeue(buffer, demand) do
       {buffer, items, count} when count == demand ->
         events = Enum.flat_map(items, &elem(&1, 1))
-        acks = update_acks(acks, items)
+        acks = update_last_offsets(acks, items)
         {:noreply, events, %{state | demand: 0, buffer: buffer, acks: acks}}
 
       {buffer, items, count} ->
         receive_timer = receive_timer || schedule_poll(state, interval)
-        acks = update_acks(acks, items)
+        acks = update_last_offsets(acks, items)
         events = Enum.flat_map(items, &elem(&1, 1))
 
         state = %{
@@ -568,17 +570,6 @@ defmodule BroadwayKafka.Producer do
 
         {:noreply, events, state}
     end
-  end
-
-  defp update_acks(acks, []) do
-    acks
-  end
-
-  defp update_acks(acks, [{key, items, last_item} | tail]) do
-    last = last_item.metadata.offset + 1
-    offsets = Enum.map(items, & &1.metadata.offset)
-    acks = Acknowledger.update_last_offset(acks, key, last, offsets)
-    update_acks(acks, tail)
   end
 
   defp schedule_poll(state, interval) do
@@ -677,36 +668,31 @@ defmodule BroadwayKafka.Producer do
 
   ## Buffer handling
 
-  defp split_demand(list, acks, key, demand) do
-    {rest, demand, reversed, acc} = reverse_split_demand(list, demand, [], [])
-    acks = update_last_offset(acks, key, reversed)
-    {acks, demand, Enum.reverse(acc), rest}
+  defp pick_items_and_enqueue_rest(buffer, acks, _key, messages, 0) do
+    {buffer, acks, messages, 0}
   end
 
-  defp reverse_split_demand(rest, 0, reversed, acc) do
-    {rest, 0, reversed, acc}
+  defp pick_items_and_enqueue_rest(buffer, acks, key, messages, count) do
+    new_buffer = Buffer.enqueue_with_key(buffer, key, messages, :front)
+    {new_buffer_after_dequeue, items, items_count} = Buffer.dequeue(new_buffer, count)
+    new_acks = update_last_offsets(acks, items)
+    events = Enum.flat_map(items, &elem(&1, 1))
+    {new_buffer_after_dequeue, new_acks, events, items_count}
   end
 
-  defp reverse_split_demand([], demand, reversed, acc) do
-    {[], demand, reversed, acc}
-  end
-
-  defp reverse_split_demand([head | tail], demand, reversed, acc) do
-    reverse_split_demand(tail, demand - 1, [head | reversed], [head | acc])
-  end
-
-  defp update_last_offset(acks, key, [message | _] = reversed) do
-    last = message.metadata.offset + 1
-    offsets = Enum.reduce(reversed, [], &[&1.metadata.offset | &2])
-    Acknowledger.update_last_offset(acks, key, last, offsets)
-  end
-
-  defp update_last_offset(acks, _key, []) do
+  defp update_last_offsets(acks, []) do
     acks
   end
 
+  defp update_last_offsets(acks, [{key, items, last_item} | tail]) do
+    last = last_item.metadata.offset + 1
+    offsets = Enum.map(items, & &1.metadata.offset)
+    acks = Acknowledger.update_last_offset(acks, key, last, offsets)
+    update_last_offsets(acks, tail)
+  end
+
   defp reset_buffer(state) do
-    put_in(state.buffer, :queue.new())
+    put_in(state.buffer, Buffer.new())
   end
 
   defp schedule_reconnect(timeout) do

@@ -19,15 +19,34 @@ defmodule BroadwayKafka.Producer.BufferTest do
       assert new_buffer == Buffer.new()
     end
 
-    test "enqueues a list with elements" do
+    test "enqueues a list with elements in rear of queue" do
       buffer = Buffer.new()
 
-      key = {0, "topic", 1}
+      key0 = {0, "topic", 1}
+      key1 = {0, "topic", 2}
       messages = [%Broadway.Message{data: nil, acknowledger: nil}]
 
-      new_buffer = Buffer.enqueue_with_key(buffer, key, messages)
+      new_buffer =
+        buffer
+        |> Buffer.enqueue_with_key(key0, messages, :rear)
+        |> Buffer.enqueue_with_key(key1, messages, :rear)
 
-      refute Buffer.empty?(new_buffer)
+      assert {:value, {^key0, _}} = :queue.out(new_buffer) |> elem(0)
+    end
+
+    test "enqueues a list with elements in front of queue" do
+      buffer = Buffer.new()
+
+      key0 = {0, "topic", 1}
+      key1 = {0, "topic", 2}
+      messages = [%Broadway.Message{data: nil, acknowledger: nil}]
+
+      new_buffer =
+        buffer
+        |> Buffer.enqueue_with_key(key0, messages, :front)
+        |> Buffer.enqueue_with_key(key1, messages, :front)
+
+      assert {:value, {^key1, _}} = :queue.out(new_buffer) |> elem(0)
     end
 
     test "enqueues a list with its key" do
