@@ -22,6 +22,7 @@ defmodule BroadwayKafka.Producer.Buffer do
   @type key :: {generation_id, topic, partition}
 
   @spec new :: t
+  @doc false
   def new do
     :queue.new()
   end
