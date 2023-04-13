@@ -25,7 +25,7 @@ jobs:
       - name: Kafka Brodway integration-test under ${{matrix.elixirbase}}
         run: earthly -P --ci --build-arg ELIXIR_BASE=${{matrix.elixirbase}} +integration-test
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       MIX_ENV: test
     strategy:
