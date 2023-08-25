@@ -2,7 +2,6 @@
 
 ## v0.4.1 (2023-03-14)
 
-  * Allow `:begin_offset` to be configured
   * Disable `offset_commit_on_ack` during revoke assignment call
 
 ## v0.4.0 (2022-08-23)

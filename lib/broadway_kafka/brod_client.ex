@@ -20,8 +20,7 @@ defmodule BroadwayKafka.BrodClient do
   @supported_fetch_config_options [
     :min_bytes,
     :max_bytes,
-    :max_wait_time,
-    :begin_offset
+    :max_wait_time
   ]
 
   @supported_client_config_options [
@@ -248,11 +247,6 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:min_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:min_bytes, "a positive integer", value)
 
-  defp validate_option(:begin_offset, :latest), do: {:ok, :latest}
-
-  defp validate_option(:begin_offset, value) when not is_integer(value) or value < 0,
-    do: validation_error(:begin_offset, "a positive integer", value)
-
   defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
     do: validation_error(:max_bytes, "a positive integer", value)
 
@@ -321,7 +315,6 @@ defmodule BroadwayKafka.BrodClient do
            validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options),
          {:ok, _} <- validate(config, :min_bytes),
          {:ok, _} <- validate(config, :max_bytes),
-         {:ok, _} <- validate(config, :begin_offset),
          {:ok, _} <- validate(config, :max_wait_time) do
       {:ok, config}
     end
