@@ -631,6 +631,7 @@ defmodule BroadwayKafka.ProducerTest do
                reconnect_timeout: 10,
                max_bytes: 10,
                offset_commit_on_ack: false,
+               begin_offset: :assigned,
                ack_raises_on_offset: ack_raises_on_offset
              ]},
           concurrency: producers_concurrency

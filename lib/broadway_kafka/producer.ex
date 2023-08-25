@@ -43,6 +43,12 @@ defmodule BroadwayKafka.Producer do
       offset in Kafka or if the current offset has expired. Possible values are `:earliest` or
       `:latest`. Default is `:latest`.
 
+    * `:begin_offset` - Optional. Defines how to get the initial offset for the consumers.
+      The possible values are `:assigned` or `:reset`. When set to `:assigned` the starting offset will be the
+      ones returned in the kafka partition assignments (the lastest committed offsets for the consumer group).
+      When set to `:reset`, the starting offset will be dictated by the `:offset_reset_policy` option, either
+      starting from the `:earliest` or the `:latest` offsets of the topic. Default is `:assigned`.
+
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
       options.
@@ -356,10 +362,16 @@ defmodule BroadwayKafka.Producer do
         brod_received_assignment(
           topic: topic,
           partition: partition,
-          begin_offset: begin_offset
+          begin_offset: assigned_begin_offset
         ) = assignment
 
         offset_reset_policy = state.config[:offset_reset_policy]
+
+        begin_offset =
+          case state.config[:begin_offset] do
+            :assigned -> assigned_begin_offset
+            :reset -> :undefined
+          end
 
         offset =
           state.client.resolve_offset(
