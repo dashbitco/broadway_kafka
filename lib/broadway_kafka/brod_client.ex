@@ -43,6 +43,10 @@ defmodule BroadwayKafka.BrodClient do
 
   @default_offset_reset_policy :latest
 
+  @begin_offset_values [:assigned, :reset]
+
+  @default_begin_offset :assigned
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts, required: true),
@@ -56,6 +60,8 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
          {:ok, offset_reset_policy} <-
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
+         {:ok, begin_offset} <-
+           validate(opts, :begin_offset, default: @default_begin_offset),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
@@ -68,6 +74,7 @@ defmodule BroadwayKafka.BrodClient do
          reconnect_timeout: reconnect_timeout,
          offset_commit_on_ack: offset_commit_on_ack,
          offset_reset_policy: offset_reset_policy,
+         begin_offset: begin_offset,
          group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
          fetch_config: Map.new(fetch_config || []),
          client_config: client_config
@@ -226,6 +233,11 @@ defmodule BroadwayKafka.BrodClient do
       "one of #{inspect(@offset_reset_policy_values)}",
       value
     )
+  end
+
+  defp validate_option(:begin_offset, value)
+       when value not in @begin_offset_values do
+    validation_error(:begin_offset, "one of #{inspect(@begin_offset_values)}", value)
   end
 
   defp validate_option(:offset_commit_interval_seconds, value)
