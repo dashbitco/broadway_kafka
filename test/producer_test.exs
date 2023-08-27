@@ -173,13 +173,12 @@ defmodule BroadwayKafka.ProducerTest do
   test "do not allow users to set :partition_by for processors" do
     Process.flag(:trap_exit, true)
 
-    Broadway.start_link(Forwarder,
-      name: new_unique_name(),
-      producer: [module: {BroadwayKafka.Producer, []}],
-      processors: [default: [partition_by: fn msg -> msg.data end]]
-    )
-
-    assert_receive {:EXIT, _, {%ArgumentError{message: message}, _}}
+    {:error, {%ArgumentError{message: message}, _}} =
+      Broadway.start_link(Forwarder,
+        name: new_unique_name(),
+        producer: [module: {BroadwayKafka.Producer, []}],
+        processors: [default: [partition_by: fn msg -> msg.data end]]
+      )
 
     assert message ==
              "cannot set option :partition_by for processors :default. " <>
@@ -189,14 +188,13 @@ defmodule BroadwayKafka.ProducerTest do
   test "do not allow users to set :partition_by for batchers" do
     Process.flag(:trap_exit, true)
 
-    Broadway.start_link(Forwarder,
-      name: new_unique_name(),
-      producer: [module: {BroadwayKafka.Producer, []}],
-      processors: [default: []],
-      batchers: [default: [partition_by: fn msg -> msg.data end]]
-    )
-
-    assert_receive {:EXIT, _, {%ArgumentError{message: message}, _}}
+    {:error, {%ArgumentError{message: message}, _}} =
+      Broadway.start_link(Forwarder,
+        name: new_unique_name(),
+        producer: [module: {BroadwayKafka.Producer, []}],
+        processors: [default: []],
+        batchers: [default: [partition_by: fn msg -> msg.data end]]
+      )
 
     assert message ==
              "cannot set option :partition_by for batchers :default. " <>

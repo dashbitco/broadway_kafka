@@ -70,6 +70,7 @@ defmodule BroadwayKafka.AllocatorTest do
         entry <- entries,
         do: ^partition = fetch!(name, entry)
 
-    map
+    # ensure the value list is sorted, to be able to reliably assert
+    Map.new(map, fn {k, v} -> {k, Enum.sort(v)} end)
   end
 end
