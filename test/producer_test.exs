@@ -43,7 +43,7 @@ defmodule BroadwayKafka.ProducerTest do
     defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
-    def init(opts), do: {:ok, Map.new(opts)}
+    def init(opts), do: {:ok, opts[:child_specs], Map.new(opts)}
 
     @impl true
     def setup(_stage_pid, client_id, _callback_module, config) do
@@ -118,20 +118,6 @@ defmodule BroadwayKafka.ProducerTest do
     @impl true
     def update_topics(_client_id, _topics) do
       :ok
-    end
-
-    @impl true
-    def shared_client_child_spec(config) do
-      [
-        Supervisor.child_spec(
-          {Task, fn -> send(config.test_pid, :child_started_1) end},
-          id: :child_started_1
-        ),
-        Supervisor.child_spec(
-          {Task, fn -> send(config.test_pid, :child_started_2) end},
-          id: :child_started_2
-        )
-      ]
     end
   end
 
@@ -255,9 +241,23 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
-  test "start all child processes defined in shared_client_child_spec/1 callback" do
+  test "start all child process returned by config" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server, shared_client: true)
+
+    parent_pid = self()
+
+    child_specs = [
+      Supervisor.child_spec(
+        {Task, fn -> send(parent_pid, :child_started_1) end},
+        id: :child_started_1
+      ),
+      Supervisor.child_spec(
+        {Task, fn -> send(parent_pid, :child_started_2) end},
+        id: :child_started_2
+      )
+    ]
+
+    {:ok, pid} = start_broadway(message_server, shared_client: true, child_specs: child_specs)
 
     assert_receive :child_started_1
     assert_receive :child_started_2
@@ -688,7 +688,8 @@ defmodule BroadwayKafka.ProducerTest do
                offset_commit_on_ack: false,
                begin_offset: :assigned,
                ack_raises_on_offset: ack_raises_on_offset,
-               shared_client: opts[:shared_client] || false
+               shared_client: opts[:shared_client] || false,
+               child_specs: opts[:child_specs] || []
              ]},
           concurrency: producers_concurrency
         ],

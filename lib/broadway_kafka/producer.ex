@@ -235,54 +235,48 @@ defmodule BroadwayKafka.Producer do
   def init(opts) do
     Process.flag(:trap_exit, true)
 
-    client = opts[:client] || BroadwayKafka.BrodClient
+    config = opts[:initialized_client_config]
 
-    case opts[:initialized_client_config] || client.init(opts) do
-      {:error, message} ->
-        raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
+    draining_after_revoke_flag =
+      self()
+      |> drain_after_revoke_table_name!()
+      |> drain_after_revoke_table_init!()
 
-      {:ok, config} ->
-        {_, producer_name} = Process.info(self(), :registered_name)
+    prefix = get_in(config, [:client_config, :client_id_prefix])
 
-        draining_after_revoke_flag =
-          self()
-          |> drain_after_revoke_table_name!()
-          |> drain_after_revoke_table_init!()
+    {_, producer_name} = Process.info(self(), :registered_name)
 
-        prefix = get_in(config, [:client_config, :client_id_prefix])
+    client_id =
+      config[:shared_client_id] || :"#{prefix}#{Module.concat([producer_name, Client])}"
 
-        client_id =
-          config[:shared_client_id] || :"#{prefix}#{Module.concat([producer_name, Client])}"
+    max_demand =
+      with [{_first, processor_opts}] <- opts[:broadway][:processors],
+           max_demand when is_integer(max_demand) <- processor_opts[:max_demand] do
+        max_demand
+      else
+        _ -> 10
+      end
 
-        max_demand =
-          with [{_first, processor_opts}] <- opts[:broadway][:processors],
-               max_demand when is_integer(max_demand) <- processor_opts[:max_demand] do
-            max_demand
-          else
-            _ -> 10
-          end
+    state = %{
+      client: opts[:client] || BroadwayKafka.BrodClient,
+      client_id: client_id,
+      group_coordinator: nil,
+      receive_timer: nil,
+      receive_interval: config.receive_interval,
+      reconnect_timeout: config.reconnect_timeout,
+      acks: Acknowledger.new(),
+      config: config,
+      allocator_names: allocator_names(opts[:broadway]),
+      revoke_caller: nil,
+      draining_after_revoke_flag: draining_after_revoke_flag,
+      demand: 0,
+      shutting_down?: false,
+      buffer: :queue.new(),
+      max_demand: max_demand,
+      shared_client: config.shared_client
+    }
 
-        state = %{
-          client: client,
-          client_id: client_id,
-          group_coordinator: nil,
-          receive_timer: nil,
-          receive_interval: config.receive_interval,
-          reconnect_timeout: config.reconnect_timeout,
-          acks: Acknowledger.new(),
-          config: config,
-          allocator_names: allocator_names(opts[:broadway]),
-          revoke_caller: nil,
-          draining_after_revoke_flag: draining_after_revoke_flag,
-          demand: 0,
-          shutting_down?: false,
-          buffer: :queue.new(),
-          max_demand: max_demand,
-          shared_client: config.shared_client
-        }
-
-        {:producer, connect(state)}
-    end
+    {:producer, connect(state)}
   end
 
   defp allocator_names(broadway_config) do
@@ -518,27 +512,21 @@ defmodule BroadwayKafka.Producer do
 
     {producer_mod, producer_opts} = opts[:producer][:module]
 
-    {extra_child_specs, initialized_client_config} =
-      if producer_opts[:shared_client] do
-        client = producer_opts[:client] || BroadwayKafka.BrodClient
+    client = producer_opts[:client] || BroadwayKafka.BrodClient
 
-        case client.init(Keyword.put(producer_opts, :broadway, opts)) do
-          {:error, message} ->
-            raise ArgumentError, "invalid options given to #{client}.init/1, " <> message
+    case client.init(Keyword.put(producer_opts, :broadway, opts)) do
+      {:error, message} ->
+        raise ArgumentError, "invalid options given to #{client}.init/1, " <> message
 
-          {:ok, config} = result ->
-            {client.shared_client_child_spec(config), result}
-        end
-      else
-        {[], nil}
-      end
+      {:ok, extra_child_specs, config} ->
+        new_producer_opts =
+          Keyword.put(producer_opts, :initialized_client_config, config)
 
-    new_producer_opts =
-      Keyword.put(producer_opts, :initialized_client_config, initialized_client_config)
+        updated_opts =
+          put_in(updated_opts, [:producer, :module], {producer_mod, new_producer_opts})
 
-    updated_opts = put_in(updated_opts, [:producer, :module], {producer_mod, new_producer_opts})
-
-    {allocators ++ extra_child_specs, updated_opts}
+        {allocators ++ extra_child_specs, updated_opts}
+    end
   end
 
   @impl :brod_group_member

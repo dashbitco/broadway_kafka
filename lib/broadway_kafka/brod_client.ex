@@ -69,22 +69,23 @@ defmodule BroadwayKafka.BrodClient do
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
-      {:ok,
-       %{
-         hosts: parse_hosts(hosts),
-         group_id: group_id,
-         topics: topics,
-         receive_interval: receive_interval,
-         reconnect_timeout: reconnect_timeout,
-         offset_commit_on_ack: offset_commit_on_ack,
-         offset_reset_policy: offset_reset_policy,
-         begin_offset: begin_offset,
-         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-         fetch_config: Map.new(fetch_config || []),
-         client_config: client_config,
-         shared_client: shared_client,
-         shared_client_id: build_shared_client_id(opts)
-       }}
+      config = %{
+        hosts: parse_hosts(hosts),
+        group_id: group_id,
+        topics: topics,
+        receive_interval: receive_interval,
+        reconnect_timeout: reconnect_timeout,
+        offset_commit_on_ack: offset_commit_on_ack,
+        offset_reset_policy: offset_reset_policy,
+        begin_offset: begin_offset,
+        group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
+        fetch_config: Map.new(fetch_config || []),
+        client_config: client_config,
+        shared_client: shared_client,
+        shared_client_id: build_shared_client_id(opts)
+      }
+
+      {:ok, shared_client_child_spec(config), config}
     end
   end
 
@@ -153,8 +154,9 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
-  @impl true
-  def shared_client_child_spec(config) do
+  defp shared_client_child_spec(%{shared_client: false}), do: []
+
+  defp shared_client_child_spec(%{shared_client: true} = config) do
     [
       %{
         id: config.shared_client_id,

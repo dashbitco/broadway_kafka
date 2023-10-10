@@ -33,16 +33,16 @@ defmodule BroadwayKafka.BrodClientTest do
       assert BrodClient.init(opts) == {:error, expected_msg <> ~s/"host:9092,"/}
 
       opts = Keyword.put(@opts, :hosts, host: 9092)
-      assert {:ok, %{hosts: [host: 9092]}} = BrodClient.init(opts)
+      assert {:ok, [], %{hosts: [host: 9092]}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :hosts, [{"host", 9092}])
-      assert {:ok, %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
+      assert {:ok, [], %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :hosts, "host:9092")
-      assert {:ok, %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
+      assert {:ok, [], %{hosts: [{"host", 9092}]}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :hosts, "host1:9092,host2:9092")
-      assert {:ok, %{hosts: [{"host1", 9092}, {"host2", 9092}]}} = BrodClient.init(opts)
+      assert {:ok, [], %{hosts: [{"host1", 9092}, {"host2", 9092}]}} = BrodClient.init(opts)
     end
 
     test ":group_id is a required string" do
@@ -55,7 +55,7 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :group_id to be a non empty string, got: :an_atom"}
 
       opts = Keyword.put(@opts, :group_id, "my_group")
-      assert {:ok, %{group_id: "my_group"}} = BrodClient.init(opts)
+      assert {:ok, [], %{group_id: "my_group"}} = BrodClient.init(opts)
     end
 
     test ":topics is a required list of strings" do
@@ -68,12 +68,12 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :topics to be a list of strings, got: :an_atom"}
 
       opts = Keyword.put(@opts, :topics, ["topic_1", "topic_2"])
-      assert {:ok, %{topics: ["topic_1", "topic_2"]}} = BrodClient.init(opts)
+      assert {:ok, [], %{topics: ["topic_1", "topic_2"]}} = BrodClient.init(opts)
     end
 
     test ":receive_interval is a non-negative integer with default value 2000" do
       opts = Keyword.delete(@opts, :receive_interval)
-      assert {:ok, %{receive_interval: 2000}} = BrodClient.init(opts)
+      assert {:ok, [], %{receive_interval: 2000}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :receive_interval, :an_atom)
 
@@ -81,11 +81,11 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :receive_interval to be a non-negative integer, got: :an_atom"}
 
       opts = Keyword.put(@opts, :receive_interval, 1000)
-      assert {:ok, %{receive_interval: 1000}} = BrodClient.init(opts)
+      assert {:ok, [], %{receive_interval: 1000}} = BrodClient.init(opts)
     end
 
     test ":reconnect_timeout is a non-negative integer with default value 1000" do
-      assert {:ok, %{reconnect_timeout: 1000}} = BrodClient.init(@opts)
+      assert {:ok, [], %{reconnect_timeout: 1000}} = BrodClient.init(@opts)
 
       opts = Keyword.put(@opts, :reconnect_timeout, :an_atom)
 
@@ -93,11 +93,11 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :reconnect_timeout to be a non-negative integer, got: :an_atom"}
 
       opts = Keyword.put(@opts, :reconnect_timeout, 2000)
-      assert {:ok, %{reconnect_timeout: 2000}} = BrodClient.init(opts)
+      assert {:ok, [], %{reconnect_timeout: 2000}} = BrodClient.init(opts)
     end
 
     test ":offset_commit_on_ack is a boolean with default value true" do
-      assert {:ok, %{offset_commit_on_ack: true}} = BrodClient.init(@opts)
+      assert {:ok, [], %{offset_commit_on_ack: true}} = BrodClient.init(@opts)
 
       opts = Keyword.put(@opts, :offset_commit_on_ack, :an_atom)
 
@@ -105,11 +105,11 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :offset_commit_on_ack to be a boolean, got: :an_atom"}
 
       opts = Keyword.put(@opts, :offset_commit_on_ack, false)
-      assert {:ok, %{offset_commit_on_ack: false}} = BrodClient.init(opts)
+      assert {:ok, [], %{offset_commit_on_ack: false}} = BrodClient.init(opts)
     end
 
     test ":offset_reset_policy can be :earliest or :latest. Default is :latest" do
-      assert {:ok, %{offset_reset_policy: :latest}} = BrodClient.init(@opts)
+      assert {:ok, [], %{offset_reset_policy: :latest}} = BrodClient.init(@opts)
 
       opts = Keyword.put(@opts, :offset_reset_policy, :an_atom)
 
@@ -118,14 +118,14 @@ defmodule BroadwayKafka.BrodClientTest do
                 "expected :offset_reset_policy to be one of [:earliest, :latest], got: :an_atom"}
 
       opts = Keyword.put(@opts, :offset_reset_policy, :earliest)
-      assert {:ok, %{offset_reset_policy: :earliest}} = BrodClient.init(opts)
+      assert {:ok, [], %{offset_reset_policy: :earliest}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :offset_reset_policy, :latest)
-      assert {:ok, %{offset_reset_policy: :latest}} = BrodClient.init(opts)
+      assert {:ok, [], %{offset_reset_policy: :latest}} = BrodClient.init(opts)
     end
 
     test ":begin_offset can be :assigned or :reset. Default is :assigned" do
-      assert {:ok, %{begin_offset: :assigned}} = BrodClient.init(@opts)
+      assert {:ok, [], %{begin_offset: :assigned}} = BrodClient.init(@opts)
 
       opts = Keyword.put(@opts, :begin_offset, :an_atom)
 
@@ -133,10 +133,10 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :begin_offset to be one of [:assigned, :reset], got: :an_atom"}
 
       opts = Keyword.put(@opts, :begin_offset, :assigned)
-      assert {:ok, %{begin_offset: :assigned}} = BrodClient.init(opts)
+      assert {:ok, [], %{begin_offset: :assigned}} = BrodClient.init(opts)
 
       opts = Keyword.put(@opts, :begin_offset, :reset)
-      assert {:ok, %{begin_offset: :reset}} = BrodClient.init(opts)
+      assert {:ok, [], %{begin_offset: :reset}} = BrodClient.init(opts)
     end
 
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
@@ -148,7 +148,7 @@ defmodule BroadwayKafka.BrodClientTest do
                   "a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], 3)
-      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
       assert group_config[:offset_commit_interval_seconds] == 3
     end
 
@@ -160,7 +160,7 @@ defmodule BroadwayKafka.BrodClientTest do
                 "expected :rejoin_delay_seconds to be a non-negative integer, got: :an_atom"}
 
       opts = put_in(@opts, [:group_config, :rejoin_delay_seconds], 3)
-      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
       assert group_config[:rejoin_delay_seconds] == 3
     end
 
@@ -172,7 +172,7 @@ defmodule BroadwayKafka.BrodClientTest do
                 "expected :session_timeout_seconds to be a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:group_config, :session_timeout_seconds], 3)
-      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
       assert group_config[:session_timeout_seconds] == 3
     end
 
@@ -184,7 +184,7 @@ defmodule BroadwayKafka.BrodClientTest do
                 "expected :heartbeat_rate_seconds to be a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:group_config, :heartbeat_rate_seconds], 3)
-      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
       assert group_config[:heartbeat_rate_seconds] == 3
     end
 
@@ -196,7 +196,7 @@ defmodule BroadwayKafka.BrodClientTest do
                 "expected :rebalance_timeout_seconds to be a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:group_config, :rebalance_timeout_seconds], 3)
-      {:ok, %{group_config: group_config}} = BrodClient.init(opts)
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
       assert group_config[:rebalance_timeout_seconds] == 3
     end
 
@@ -207,7 +207,7 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :min_bytes to be a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:fetch_config, :min_bytes], 3)
-      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(opts)
       assert fetch_config[:min_bytes] == 3
     end
 
@@ -218,7 +218,7 @@ defmodule BroadwayKafka.BrodClientTest do
                {:error, "expected :max_bytes to be a positive integer, got: :an_atom"}
 
       opts = put_in(@opts, [:fetch_config, :max_bytes], 3)
-      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(opts)
       assert fetch_config[:max_bytes] == 3
     end
 
@@ -228,11 +228,11 @@ defmodule BroadwayKafka.BrodClientTest do
       assert BrodClient.init(opts) ==
                {:error, "expected :max_wait_time to be a positive integer, got: :an_atom"}
 
-      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(@opts)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(@opts)
       assert not Map.has_key?(fetch_config, :max_wait_time)
 
       opts = put_in(@opts, [:fetch_config, :max_wait_time], 3)
-      {:ok, %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(opts)
       assert fetch_config[:max_wait_time] == 3
     end
 
@@ -244,7 +244,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :client_id_prefix], "a string")
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   client_id_prefix: "a string"
@@ -267,7 +267,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :sasl], {:plain, "username", "password"})
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   sasl: {:plain, "username", "password"}
@@ -278,7 +278,7 @@ defmodule BroadwayKafka.BrodClientTest do
     test ":sasl is an optional tuple of :callback, SASL Authentication Plugin module and opts" do
       opts = put_in(@opts, [:client_config, :sasl], {:callback, FakeSaslMechanismPlugin, {}})
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   sasl: {:callback, FakeSaslMechanismPlugin, {}}
@@ -300,7 +300,7 @@ defmodule BroadwayKafka.BrodClientTest do
           certfile: "client.crt"
         )
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   ssl: [cacertfile: "ca.crt", keyfile: "client.key", certfile: "client.crt"]
@@ -309,7 +309,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :ssl], true)
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [ssl: true]
               }} = BrodClient.init(opts)
@@ -323,7 +323,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :connect_timeout], 5000)
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   connect_timeout: 5000
@@ -345,7 +345,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :request_timeout], 5000)
 
-      assert {:ok,
+      assert {:ok, [],
               %{
                 client_config: [
                   request_timeout: 5000
@@ -361,7 +361,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       opts = put_in(@opts, [:client_config, :query_api_versions], false)
 
-      assert {:ok, %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
+      assert {:ok, [], %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
     end
 
     test ":shared_client is an optional boolean" do
@@ -376,7 +376,7 @@ defmodule BroadwayKafka.BrodClientTest do
         |> Keyword.put(:broadway, name: :my_broadway_name)
         |> put_in([:client_config, :client_id_prefix], "my_prefix.")
 
-      assert {:ok, %{shared_client: true}} = BrodClient.init(opts)
+      assert {:ok, _specs, %{shared_client: true}} = BrodClient.init(opts)
     end
 
     test "return shared_client_id when :shared_client is true" do
@@ -386,42 +386,12 @@ defmodule BroadwayKafka.BrodClientTest do
         |> Keyword.put(:broadway, name: :my_broadway_name)
         |> put_in([:client_config, :client_id_prefix], "my_prefix.")
 
-      assert {:ok,
+      assert {:ok, child_specs,
               %{
                 shared_client: true,
                 shared_client_id: :"my_prefix.Elixir.my_broadway_name.SharedClient"
               }} =
                BrodClient.init(opts)
-
-      opts =
-        @opts
-        |> Keyword.put(:shared_client, false)
-        |> Keyword.put(:broadway, name: :my_broadway_name)
-        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
-
-      assert {:ok,
-              %{
-                shared_client: false,
-                shared_client_id: nil
-              }} =
-               BrodClient.init(opts)
-    end
-  end
-
-  describe "shared_client_child_spec" do
-    test "should return child spec" do
-      module_opts =
-        @opts
-        |> Keyword.put(:shared_client, true)
-        |> Keyword.put(:client_config, client_id_prefix: "my_prefix.")
-
-      broadway_opts = [
-        name: :my_broadway
-      ]
-
-      {:ok, config} = BrodClient.init(Keyword.put(module_opts, :broadway, broadway_opts))
-
-      assert child_specs = BrodClient.shared_client_child_spec(config)
 
       assert [
                %{
@@ -431,8 +401,21 @@ defmodule BroadwayKafka.BrodClientTest do
              ] = child_specs
 
       assert [{:host, 9092}] = hosts
-      assert :"my_prefix.Elixir.my_broadway.SharedClient" = shared_client_id
+      assert :"my_prefix.Elixir.my_broadway_name.SharedClient" = shared_client_id
       assert [client_id_prefix: "my_prefix."] = client_config
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, false)
+        |> Keyword.put(:broadway, name: :my_broadway_name)
+        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
+
+      assert {:ok, [],
+              %{
+                shared_client: false,
+                shared_client_id: nil
+              }} =
+               BrodClient.init(opts)
     end
   end
 
