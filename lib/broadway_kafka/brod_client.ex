@@ -154,17 +154,15 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   @impl true
-  def prepare_for_start(broadway_opts) do
-    {_, producer_opts} = broadway_opts[:producer][:module]
-    init_opts = Keyword.put(producer_opts, :broadway, broadway_opts)
-
-    case init(init_opts) do
-      {:error, message} ->
-        raise ArgumentError, "invalid options given to #{__MODULE__}.init/1, " <> message
-
-      {:ok, config} ->
-        {child_specs(config), broadway_opts}
-    end
+  def shared_client_child_spec(config) do
+    [
+      %{
+        id: config.shared_client_id,
+        start:
+          {:brod, :start_link_client,
+           [config.hosts, config.shared_client_id, config.client_config]}
+      }
+    ]
   end
 
   defp lookup_offset(hosts, topic, partition, policy, client_config) do
@@ -192,19 +190,6 @@ defmodule BroadwayKafka.BrodClient do
       callback_module,
       stage_pid
     )
-  end
-
-  defp child_specs(%{shared_client: false} = _config), do: []
-
-  defp child_specs(%{shared_client: true} = config) do
-    [
-      %{
-        id: config.shared_client_id,
-        start:
-          {:brod, :start_link_client,
-           [config.hosts, config.shared_client_id, config.client_config]}
-      }
-    ]
   end
 
   defp validate(opts, key, options \\ []) when is_list(opts) do

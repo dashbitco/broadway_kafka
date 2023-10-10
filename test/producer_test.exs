@@ -121,22 +121,17 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     @impl true
-    def prepare_for_start(broadway_opts) do
-      {_, kafka_producer_opts} = broadway_opts[:producer][:module]
-      parent_pid = kafka_producer_opts[:test_pid]
-
-      child_specs = [
+    def shared_client_child_spec(config) do
+      [
         Supervisor.child_spec(
-          {Task, fn -> send(parent_pid, :prepare_for_start_1) end},
-          id: :prepare_for_start_1
+          {Task, fn -> send(config.test_pid, :child_started_1) end},
+          id: :child_started_1
         ),
         Supervisor.child_spec(
-          {Task, fn -> send(parent_pid, :prepare_for_start_2) end},
-          id: :prepare_for_start_2
+          {Task, fn -> send(config.test_pid, :child_started_2) end},
+          id: :child_started_2
         )
       ]
-
-      {child_specs, broadway_opts}
     end
   end
 
@@ -260,12 +255,12 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
-  test "start all child processes defined in prepare_for_start/1 callback" do
+  test "start all child processes defined in shared_client_child_spec/1 callback" do
     {:ok, message_server} = MessageServer.start_link()
-    {:ok, pid} = start_broadway(message_server)
+    {:ok, pid} = start_broadway(message_server, shared_client: true)
 
-    assert_receive :prepare_for_start_1
-    assert_receive :prepare_for_start_2
+    assert_receive :child_started_1
+    assert_receive :child_started_2
 
     stop_broadway(pid)
   end

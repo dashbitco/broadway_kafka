@@ -55,9 +55,8 @@ defmodule BroadwayKafka.KafkaClient do
   @callback connected?(:brod.client()) :: boolean
   @callback disconnect(:brod.client()) :: :ok
 
-  @callback prepare_for_start(broadway_opts :: keyword()) ::
-              {[child_spec], updated_opts :: keyword()}
+  @callback shared_client_child_spec(config()) :: [child_spec]
             when child_spec: :supervisor.child_spec() | {module, any} | module
 
-  @optional_callbacks prepare_for_start: 1
+  @optional_callbacks shared_client_child_spec: 1
 end

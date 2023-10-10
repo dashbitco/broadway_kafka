@@ -408,32 +408,20 @@ defmodule BroadwayKafka.BrodClientTest do
     end
   end
 
-  describe "prepare for start" do
-    test "should return an empty list and unchanged opts when shared_client is not true" do
-      broadway_opts = [
-        name: :my_broadway,
-        producer: [
-          module: {BroadwayKafka.Producer, @opts}
-        ]
-      ]
-
-      assert {[], ^broadway_opts} = BrodClient.prepare_for_start(broadway_opts)
-    end
-
-    test "should return :brod_client child spec and unchanged opts when shared_client is true" do
+  describe "shared_client_child_spec" do
+    test "should return child spec" do
       module_opts =
         @opts
         |> Keyword.put(:shared_client, true)
         |> Keyword.put(:client_config, client_id_prefix: "my_prefix.")
 
       broadway_opts = [
-        name: :my_broadway,
-        producer: [
-          module: {BroadwayKafka.Producer, module_opts}
-        ]
+        name: :my_broadway
       ]
 
-      assert {child_specs, ^broadway_opts} = BrodClient.prepare_for_start(broadway_opts)
+      {:ok, config} = BrodClient.init(Keyword.put(module_opts, :broadway, broadway_opts))
+
+      assert child_specs = BrodClient.shared_client_child_spec(config)
 
       assert [
                %{

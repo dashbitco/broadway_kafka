@@ -237,7 +237,7 @@ defmodule BroadwayKafka.Producer do
 
     client = opts[:client] || BroadwayKafka.BrodClient
 
-    case client.init(opts) do
+    case opts[:initialized_client_config] || client.init(opts) do
       {:error, message} ->
         raise ArgumentError, "invalid options given to #{inspect(client)}.init/1, " <> message
 
@@ -278,7 +278,7 @@ defmodule BroadwayKafka.Producer do
           shutting_down?: false,
           buffer: :queue.new(),
           max_demand: max_demand,
-          shared_client: config[:shared_client]
+          shared_client: config.shared_client
         }
 
         {:producer, connect(state)}
@@ -516,17 +516,29 @@ defmodule BroadwayKafka.Producer do
       |> Keyword.put(:processors, [updated_processor_entry | other_processors_entries])
       |> Keyword.put(:batchers, updated_batchers_entries)
 
-    {_, kafka_producer_opts} = opts[:producer][:module]
-    client = kafka_producer_opts[:client] || BroadwayKafka.BrodClient
+    {producer_mod, producer_opts} = opts[:producer][:module]
 
-    {client_child_specs, updated_opts} =
-      if function_exported?(client, :prepare_for_start, 1) do
-        client.prepare_for_start(updated_opts)
+    {extra_child_specs, initialized_client_config} =
+      if producer_opts[:shared_client] do
+        client = producer_opts[:client] || BroadwayKafka.BrodClient
+
+        case client.init(Keyword.put(producer_opts, :broadway, opts)) do
+          {:error, message} ->
+            raise ArgumentError, "invalid options given to #{client}.init/1, " <> message
+
+          {:ok, config} = result ->
+            {client.shared_client_child_spec(config), result}
+        end
       else
-        {[], updated_opts}
+        {[], nil}
       end
 
-    {allocators ++ client_child_specs, updated_opts}
+    new_producer_opts =
+      Keyword.put(producer_opts, :initialized_client_config, initialized_client_config)
+
+    updated_opts = put_in(updated_opts, [:producer, :module], {producer_mod, new_producer_opts})
+
+    {allocators ++ extra_child_specs, updated_opts}
   end
 
   @impl :brod_group_member
