@@ -48,7 +48,7 @@ defmodule BroadwayKafka.ProducerTest do
     @impl true
     def setup(_stage_pid, client_id, _callback_module, config) do
       if !Process.whereis(client_id) do
-        {:ok, _pid} = Agent.start(fn -> true end, name: client_id)
+        {:ok, _pid} = Agent.start(fn -> Map.put(config, :connected, true) end, name: client_id)
         Process.monitor(client_id)
       end
 
@@ -96,14 +96,17 @@ defmodule BroadwayKafka.ProducerTest do
     def connected?(client_id) do
       connected? =
         if pid = Process.whereis(client_id) do
-          Process.alive?(pid) && Agent.get(client_id, & &1)
+          Process.alive?(pid) && Agent.get(client_id, fn config -> config.connected end)
         end
 
       connected?
     end
 
     @impl true
-    def disconnect(_client_id) do
+    def disconnect(client_id) do
+      test_pid = Agent.get(client_id, fn config -> config.test_pid end)
+      send(test_pid, :disconnected)
+
       :ok
     end
 
@@ -115,6 +118,25 @@ defmodule BroadwayKafka.ProducerTest do
     @impl true
     def update_topics(_client_id, _topics) do
       :ok
+    end
+
+    @impl true
+    def prepare_for_start(broadway_opts) do
+      {_, kafka_producer_opts} = broadway_opts[:producer][:module]
+      parent_pid = kafka_producer_opts[:test_pid]
+
+      child_specs = [
+        Supervisor.child_spec(
+          {Task, fn -> send(parent_pid, :prepare_for_start_1) end},
+          id: :prepare_for_start_1
+        ),
+        Supervisor.child_spec(
+          {Task, fn -> send(parent_pid, :prepare_for_start_2) end},
+          id: :prepare_for_start_2
+        )
+      ]
+
+      {child_specs, broadway_opts}
     end
   end
 
@@ -236,6 +258,30 @@ defmodule BroadwayKafka.ProducerTest do
     end
 
     stop_broadway(pid)
+  end
+
+  test "start all child processes defined in prepare_for_start/1 callback" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+
+    assert_receive :prepare_for_start_1
+    assert_receive :prepare_for_start_2
+
+    stop_broadway(pid)
+  end
+
+  test "should not disconnect client if shared_client true" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: false)
+    stop_broadway(pid)
+
+    assert_receive :disconnected
+
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server, shared_client: true)
+    stop_broadway(pid)
+
+    refute_receive :disconnected
   end
 
   test "single producer receiving messages from multiple topic/partitions" do
@@ -384,13 +430,29 @@ defmodule BroadwayKafka.ProducerTest do
       [topic: "topic_2", partition: 0, begin_offset: 301]
     ])
 
-    MessageServer.push_messages(message_server, 1..50, topic: "topic_1", partition: 0, offset: 110)
+    MessageServer.push_messages(message_server, 1..50,
+      topic: "topic_1",
+      partition: 0,
+      offset: 110
+    )
 
-    MessageServer.push_messages(message_server, 1..50, topic: "topic_1", partition: 1, offset: 210)
+    MessageServer.push_messages(message_server, 1..50,
+      topic: "topic_1",
+      partition: 1,
+      offset: 210
+    )
 
-    MessageServer.push_messages(message_server, 1..50, topic: "topic_2", partition: 0, offset: 310)
+    MessageServer.push_messages(message_server, 1..50,
+      topic: "topic_2",
+      partition: 0,
+      offset: 310
+    )
 
-    MessageServer.push_messages(message_server, 1..50, topic: "topic_2", partition: 1, offset: 410)
+    MessageServer.push_messages(message_server, 1..50,
+      topic: "topic_2",
+      partition: 1,
+      offset: 410
+    )
 
     assert_receive {:batch_handled, %{topic: "topic_1", partition: 0, pid: consumer_1}}
     assert_receive {:batch_handled, %{topic: "topic_1", partition: 1, pid: consumer_2}}
@@ -569,10 +631,10 @@ defmodule BroadwayKafka.ProducerTest do
     Process.exit(Process.whereis(client_id), :kill)
     refute_receive {:setup, _}
 
-    {:ok, _} = Agent.start(fn -> false end, name: client_id)
+    {:ok, _} = Agent.start_link(fn -> %{test_pid: self(), connected: false} end, name: client_id)
     refute_receive {:setup, _}
 
-    Agent.update(client_id, fn _ -> true end)
+    Agent.update(client_id, fn state -> Map.put(state, :connected, true) end)
     assert_receive {:setup, ^client_id}
 
     stop_broadway(pid)
@@ -630,7 +692,8 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
-               ack_raises_on_offset: ack_raises_on_offset
+               ack_raises_on_offset: ack_raises_on_offset,
+               shared_client: opts[:shared_client] || false
              ]},
           concurrency: producers_concurrency
         ],

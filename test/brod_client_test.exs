@@ -363,6 +363,89 @@ defmodule BroadwayKafka.BrodClientTest do
 
       assert {:ok, %{client_config: [query_api_versions: false]}} = BrodClient.init(opts)
     end
+
+    test ":shared_client is an optional boolean" do
+      opts = Keyword.put(@opts, :shared_client, "true")
+
+      assert BrodClient.init(opts) ==
+               {:error, "expected :shared_client to be a boolean, got: \"true\""}
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: :my_broadway_name)
+        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
+
+      assert {:ok, %{shared_client: true}} = BrodClient.init(opts)
+    end
+
+    test "return shared_client_id when :shared_client is true" do
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:broadway, name: :my_broadway_name)
+        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
+
+      assert {:ok,
+              %{
+                shared_client: true,
+                shared_client_id: :"my_prefix.Elixir.my_broadway_name.SharedClient"
+              }} =
+               BrodClient.init(opts)
+
+      opts =
+        @opts
+        |> Keyword.put(:shared_client, false)
+        |> Keyword.put(:broadway, name: :my_broadway_name)
+        |> put_in([:client_config, :client_id_prefix], "my_prefix.")
+
+      assert {:ok,
+              %{
+                shared_client: false,
+                shared_client_id: nil
+              }} =
+               BrodClient.init(opts)
+    end
+  end
+
+  describe "prepare for start" do
+    test "should return an empty list and unchanged opts when shared_client is not true" do
+      broadway_opts = [
+        name: :my_broadway,
+        producer: [
+          module: {BroadwayKafka.Producer, @opts}
+        ]
+      ]
+
+      assert {[], ^broadway_opts} = BrodClient.prepare_for_start(broadway_opts)
+    end
+
+    test "should return :brod_client child spec and unchanged opts when shared_client is true" do
+      module_opts =
+        @opts
+        |> Keyword.put(:shared_client, true)
+        |> Keyword.put(:client_config, client_id_prefix: "my_prefix.")
+
+      broadway_opts = [
+        name: :my_broadway,
+        producer: [
+          module: {BroadwayKafka.Producer, module_opts}
+        ]
+      ]
+
+      assert {child_specs, ^broadway_opts} = BrodClient.prepare_for_start(broadway_opts)
+
+      assert [
+               %{
+                 id: shared_client_id,
+                 start: {:brod, :start_link_client, [hosts, shared_client_id, client_config]}
+               }
+             ] = child_specs
+
+      assert [{:host, 9092}] = hosts
+      assert :"my_prefix.Elixir.my_broadway.SharedClient" = shared_client_id
+      assert [client_id_prefix: "my_prefix."] = client_config
+    end
   end
 
   defmodule FakeSaslMechanismPlugin do
