@@ -309,8 +309,8 @@ defmodule BroadwayKafka.ConsumerSharedClientTest do
             {BroadwayKafka.Producer,
              [
                hosts: [localhost: 9092],
-               group_id: "brod_my_group",
-               topics: ["test"],
+               group_id: "brod_my_group_2",
+               topics: ["test_2"],
                receive_interval: 100,
                group_config: [
                  offset_commit_interval_seconds: 1,
@@ -362,7 +362,7 @@ defmodule BroadwayKafka.ConsumerSharedClientTest do
   end
 
   setup_all do
-    topic = "test"
+    topic = "test_2"
     hosts = [localhost: 9092]
 
     reset_topic(topic)
