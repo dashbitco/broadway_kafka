@@ -130,7 +130,7 @@ defmodule BroadwayKafka.ConsumerTest do
     end
 
     # Let's wait a bit to see if we get more messages
-    Process.sleep(1000)
+    Process.sleep(2000)
 
     messages = Agent.get(messages_agent, & &1)
 
@@ -393,7 +393,7 @@ defmodule BroadwayKafka.ConsumerSharedClientTest do
     end
 
     # Let's wait a bit to see if we get more messages
-    Process.sleep(1000)
+    Process.sleep(2000)
 
     messages = Agent.get(messages_agent, & &1)
 
