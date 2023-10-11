@@ -47,6 +47,8 @@ defmodule BroadwayKafka.BrodClient do
 
   @default_begin_offset :assigned
 
+  @default_shared_client false
+
   @impl true
   def init(opts) do
     with {:ok, hosts} <- validate(opts, :hosts, required: true),
@@ -62,29 +64,34 @@ defmodule BroadwayKafka.BrodClient do
            validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
          {:ok, begin_offset} <-
            validate(opts, :begin_offset, default: @default_begin_offset),
+         {:ok, shared_client} <-
+           validate(opts, :shared_client, default: @default_shared_client),
          {:ok, group_config} <- validate_group_config(opts),
          {:ok, fetch_config} <- validate_fetch_config(opts),
          {:ok, client_config} <- validate_client_config(opts) do
-      {:ok,
-       %{
-         hosts: parse_hosts(hosts),
-         group_id: group_id,
-         topics: topics,
-         receive_interval: receive_interval,
-         reconnect_timeout: reconnect_timeout,
-         offset_commit_on_ack: offset_commit_on_ack,
-         offset_reset_policy: offset_reset_policy,
-         begin_offset: begin_offset,
-         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-         fetch_config: Map.new(fetch_config || []),
-         client_config: client_config
-       }}
+      config = %{
+        hosts: parse_hosts(hosts),
+        group_id: group_id,
+        topics: topics,
+        receive_interval: receive_interval,
+        reconnect_timeout: reconnect_timeout,
+        offset_commit_on_ack: offset_commit_on_ack,
+        offset_reset_policy: offset_reset_policy,
+        begin_offset: begin_offset,
+        group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
+        fetch_config: Map.new(fetch_config || []),
+        client_config: client_config,
+        shared_client: shared_client,
+        shared_client_id: build_shared_client_id(opts)
+      }
+
+      {:ok, shared_client_child_spec(config), config}
     end
   end
 
   @impl true
   def setup(stage_pid, client_id, callback_module, config) do
-    with :ok <- :brod.start_client(config.hosts, client_id, config.client_config),
+    with :ok <- do_start_brod_client(config.hosts, client_id, config.client_config),
          {:ok, group_coordinator} <-
            start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
       Process.monitor(client_id)
@@ -145,6 +152,19 @@ defmodule BroadwayKafka.BrodClient do
                   "partition=#{partition}). Reason: #{inspect(reason)}"
       end
     end
+  end
+
+  defp shared_client_child_spec(%{shared_client: false}), do: []
+
+  defp shared_client_child_spec(%{shared_client: true} = config) do
+    [
+      %{
+        id: config.shared_client_id,
+        start:
+          {:brod, :start_link_client,
+           [config.hosts, config.shared_client_id, config.client_config]}
+      }
+    ]
   end
 
   defp lookup_offset(hosts, topic, partition, policy, client_config) do
@@ -268,6 +288,9 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:client_id_prefix, value) when not is_binary(value),
     do: validation_error(:client_id_prefix, "a string", value)
 
+  defp validate_option(:shared_client, value) when not is_boolean(value),
+    do: validation_error(:shared_client, "a boolean", value)
+
   defp validate_option(:sasl, :undefined),
     do: {:ok, :undefined}
 
@@ -387,4 +410,29 @@ defmodule BroadwayKafka.BrodClient do
   end
 
   defp parse_hosts(hosts), do: hosts
+
+  defp build_shared_client_id(opts) do
+    if opts[:shared_client] do
+      prefix = get_in(opts, [:client_config, :client_id_prefix])
+      broadway_name = opts[:broadway][:name]
+      :"#{prefix}#{Module.concat(broadway_name, SharedClient)}"
+    end
+  end
+
+  defp do_start_brod_client(hosts, client_id, client_config) do
+    case :brod.start_client(hosts, client_id, client_config) do
+      :ok ->
+        :ok
+
+      # Because  we are starting the client on the broadway supervison tree
+      # instead of the :brod supervisor, the already_started error
+      # is not properly handled by :brod.start_client/3 for shared clients
+      # So we must handle it here.
+      {:error, {{:already_started, _}, _}} ->
+        :ok
+
+      error ->
+        error
+    end
+  end
 end
