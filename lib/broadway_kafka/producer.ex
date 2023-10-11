@@ -49,9 +49,9 @@ defmodule BroadwayKafka.Producer do
       When set to `:reset`, the starting offset will be dictated by the `:offset_reset_policy` option, either
       starting from the `:earliest` or the `:latest` offsets of the topic. Default is `:assigned`.
 
-    * `:shared_client` - Optional. A boolean that defines how many clients will be started.
-    If `true`, only one shared client will be started for all producers, if `false` each producer
-    will have it's own client. Default is `false`
+    * `:shared_client` - Optional. When false, it starts one client per producer.
+      When true, it starts a single shared client across all producers (which may reduce
+      memory/resource usage). Default is `false`.
 
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
