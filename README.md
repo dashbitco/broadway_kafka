@@ -13,7 +13,7 @@ Add `:broadway_kafka` to the list of dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:broadway_kafka, "~> 0.3.0"}
+    {:broadway_kafka, "~> 0.4.1"}
   ]
 end
 ```
