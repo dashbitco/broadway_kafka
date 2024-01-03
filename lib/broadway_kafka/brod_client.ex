@@ -297,14 +297,14 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:sasl, value = {:callback, _callback_module, _opts}),
     do: {:ok, value}
 
-  defp validate_option(:sasl, {mechanism, username, password})
+  defp validate_option(:sasl, {mechanism, username, password} = value)
        when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
               is_binary(username) and
               is_binary(password) do
     {:ok, value}
   end
 
-  defp validate_option(:sasl, {mechanism, path})
+  defp validate_option(:sasl, {mechanism, path} = value)
        when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
               is_binary(path) do
     {:ok, value}
