@@ -257,13 +257,13 @@ defmodule BroadwayKafka.BrodClientTest do
 
       assert BrodClient.init(opts) ==
                {:error,
-                "expected :sasl to be a tuple of SASL mechanism, username and password, got: :an_atom"}
+                "expected :sasl to be a tuple of SASL mechanism, username and password, or mechanism and path, got: :an_atom"}
 
       opts = put_in(@opts, [:client_config, :sasl], {:an_atom, "username", "password"})
 
       assert BrodClient.init(opts) ==
                {:error,
-                "expected :sasl to be a tuple of SASL mechanism, username and password, got: {:an_atom, \"username\", \"password\"}"}
+                "expected :sasl to be a tuple of SASL mechanism, username and password, or mechanism and path, got: {:an_atom, \"username\", \"password\"}"}
 
       opts = put_in(@opts, [:client_config, :sasl], {:plain, "username", "password"})
 
@@ -271,6 +271,15 @@ defmodule BroadwayKafka.BrodClientTest do
               %{
                 client_config: [
                   sasl: {:plain, "username", "password"}
+                ]
+              }} = BrodClient.init(opts)
+
+      opts = put_in(@opts, [:client_config, :sasl], {:plain, "filepath"})
+
+      assert {:ok, [],
+              %{
+                client_config: [
+                  sasl: {:plain, "filepath"}
                 ]
               }} = BrodClient.init(opts)
     end
@@ -390,8 +399,7 @@ defmodule BroadwayKafka.BrodClientTest do
               %{
                 shared_client: true,
                 shared_client_id: :"my_prefix.Elixir.my_broadway_name.SharedClient"
-              }} =
-               BrodClient.init(opts)
+              }} = BrodClient.init(opts)
 
       assert [
                %{
@@ -414,8 +422,7 @@ defmodule BroadwayKafka.BrodClientTest do
               %{
                 shared_client: false,
                 shared_client_id: nil
-              }} =
-               BrodClient.init(opts)
+              }} = BrodClient.init(opts)
     end
   end
 
