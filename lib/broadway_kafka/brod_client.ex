@@ -169,6 +169,13 @@ defmodule BroadwayKafka.BrodClient do
 
   defp lookup_offset(hosts, topic, partition, policy, client_config) do
     case :brod.resolve_offset(hosts, topic, partition, policy, client_config) do
+      {:ok, -1} ->
+        # `:brod.resolve_offset` returns -1 when asked to resolve a timestamp newer
+        # than all the messages in the partition.
+        # -1 is not a valid offset you can use with `:brod.fetch` so we need to
+        # resolve the latest offset instead
+        lookup_offset(hosts, topic, partition, :latest, client_config)
+
       {:ok, offset} ->
         offset
 
@@ -246,11 +253,16 @@ defmodule BroadwayKafka.BrodClient do
   defp validate_option(:offset_commit_on_ack, value) when not is_boolean(value),
     do: validation_error(:offset_commit_on_ack, "a boolean", value)
 
+  defp validate_option(:offset_reset_policy, {:timestamp, timestamp})
+       when is_integer(timestamp) and timestamp > 0 do
+    {:ok, {:timestamp, timestamp}}
+  end
+
   defp validate_option(:offset_reset_policy, value)
        when value not in @offset_reset_policy_values do
     validation_error(
       :offset_reset_policy,
-      "one of #{inspect(@offset_reset_policy_values)}",
+      "one of #{inspect(@offset_reset_policy_values)} or `{:timestamp, timestamp}` where timestamp is a non-negative integer",
       value
     )
   end
@@ -397,6 +409,9 @@ defmodule BroadwayKafka.BrodClient do
 
       :latest ->
         -1
+
+      {:timestamp, timestamp} when is_integer(timestamp) and timestamp >= 0 ->
+        timestamp
     end
   end
 
