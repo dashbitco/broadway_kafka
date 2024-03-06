@@ -115,7 +115,7 @@ defmodule BroadwayKafka.BrodClientTest do
 
       assert BrodClient.init(opts) ==
                {:error,
-                "expected :offset_reset_policy to be one of [:earliest, :latest], got: :an_atom"}
+                "expected :offset_reset_policy to be one of [:earliest, :latest] or `{:timestamp, timestamp}` where timestamp is a non-negative integer, got: :an_atom"}
 
       opts = Keyword.put(@opts, :offset_reset_policy, :earliest)
       assert {:ok, [], %{offset_reset_policy: :earliest}} = BrodClient.init(opts)

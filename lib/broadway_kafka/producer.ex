@@ -40,8 +40,8 @@ defmodule BroadwayKafka.Producer do
       since only one commit request will be performed per batch.
 
     * `:offset_reset_policy` - Optional. Defines the offset to be used when there's no initial
-      offset in Kafka or if the current offset has expired. Possible values are `:earliest` or
-      `:latest`. Default is `:latest`.
+      offset in Kafka or if the current offset has expired. Possible values are `:earliest`,
+      `:latest` or {:timestamp, timestamp} (in milliseconds). Default is `:latest`.
 
     * `:begin_offset` - Optional. Defines how to get the initial offset for the consumers.
       The possible values are `:assigned` or `:reset`. When set to `:assigned` the starting offset will be the
