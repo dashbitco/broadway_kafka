@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.2 (2024-04-01)
+
+  * Add support for timestamp `:offset_reset_policy`
+  * Supports reading sasl credentials from file
+  * Add `:begin_offset` option
+  * Do not block until coordinator exits to avoid deadlocks
+
 ## v0.4.1 (2023-03-14)
 
   * Disable `offset_commit_on_ack` during revoke assignment call
