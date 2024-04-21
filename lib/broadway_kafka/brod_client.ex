@@ -29,7 +29,8 @@ defmodule BroadwayKafka.BrodClient do
     :connect_timeout,
     :request_timeout,
     :client_id_prefix,
-    :query_api_versions
+    :query_api_versions,
+    :extra_sock_opts
   ]
 
   @default_receive_interval 2000
