@@ -139,6 +139,9 @@ defmodule BroadwayKafka.Producer do
     * `:request_timeout` - Optional. Time in milliseconds to be used as a timeout for waiting response from Kafka.
     Default is to use `:brod`'s default timeout which is currently 240 seconds.
 
+    * `:extra_sock_opts` - Optional. `gen_tcp` socket options. [More info](https://www.erlang.org/doc/man/gen_tcp.html#type-option).
+    Set to `[:inet6]` if your Kafka broker uses IPv6.
+
   > **Note**: Currently, Broadway does not support all options provided by `:brod`. If you
   have a scenario where you need any extra option that is not listed above, please open an
   issue, so we can consider adding it.
