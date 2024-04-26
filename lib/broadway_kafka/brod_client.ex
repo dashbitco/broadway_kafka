@@ -80,7 +80,7 @@ defmodule BroadwayKafka.BrodClient do
         offset_reset_policy: offset_reset_policy,
         begin_offset: begin_offset,
         group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-        fetch_config: Map.new(fetch_config || []),
+        fetch_config: Map.new(fetch_config),
         client_config: client_config,
         shared_client: shared_client,
         shared_client_id: build_shared_client_id(opts)
@@ -111,7 +111,7 @@ defmodule BroadwayKafka.BrodClient do
   def ack(group_coordinator, generation_id, topic, partition, offset, config) do
     :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
 
-    if group_coordinator && config.offset_commit_on_ack do
+    if config.offset_commit_on_ack do
       :brod_group_coordinator.commit_offsets(group_coordinator, [{{topic, partition}, offset}])
     end
 
