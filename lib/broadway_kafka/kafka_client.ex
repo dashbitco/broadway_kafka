@@ -15,7 +15,7 @@ defmodule BroadwayKafka.KafkaClient do
          }
 
   @typep offset_reset_policy :: :earliest | :latest
-  @typep brod_group_coordinator :: pid()
+  @typep brod_group_coordinator :: pid() | nil
 
   @callback init(opts :: any) :: {:ok, config} | {:error, any}
   @callback setup(
@@ -26,7 +26,7 @@ defmodule BroadwayKafka.KafkaClient do
             ) ::
               {:ok, group_coordinator :: brod_group_coordinator()} | {:error, any}
   @callback ack(
-              group_coordinator :: brod_group_coordinator,
+              group_coordinator :: brod_group_coordinator(),
               generation_id :: integer,
               topic :: binary,
               partition :: integer,

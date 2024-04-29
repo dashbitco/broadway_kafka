@@ -109,10 +109,12 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def ack(group_coordinator, generation_id, topic, partition, offset, config) do
-    :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
+    if group_coordinator do
+      :brod_group_coordinator.ack(group_coordinator, generation_id, topic, partition, offset)
 
-    if config.offset_commit_on_ack do
-      :brod_group_coordinator.commit_offsets(group_coordinator, [{{topic, partition}, offset}])
+      if config.offset_commit_on_ack do
+        :brod_group_coordinator.commit_offsets(group_coordinator, [{{topic, partition}, offset}])
+      end
     end
 
     :ok
@@ -188,7 +190,11 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def update_topics(group_coordinator, topics) do
-    :brod_group_coordinator.update_topics(group_coordinator, topics)
+    if group_coordinator do
+      :brod_group_coordinator.update_topics(group_coordinator, topics)
+    end
+
+    :ok
   end
 
   defp start_link_group_coordinator(stage_pid, client_id, callback_module, config) do
