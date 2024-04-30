@@ -1,6 +1,6 @@
 # BroadwayKafka
 
-[![Build Status](https://github.com/dashbitco/broadway_kafka/workflows/CI/badge.svg)](https://github.com/dahsbitco/broadway_kafka/actions)
+[![Build Status](https://github.com/dashbitco/broadway_kafka/actions/workflows/ci.yml/badge.svg)](https://github.com/dashbitco/broadway_kafka/actions/workflows/ci.yml)
 
 A Kafka connector for [Broadway](https://github.com/dashbitco/broadway).
 
