@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.4.3 (2024-06-12)
+
+  * Support setting socket options on Kafka connection
+
 ## v0.4.2 (2024-04-01)
 
   * Add support for timestamp `:offset_reset_policy`
