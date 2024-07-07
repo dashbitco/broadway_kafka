@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+ * Update brod dependency to ~> 4.0
+
 ## v0.4.3 (2024-06-12)
 
   * Support setting socket options on Kafka connection
