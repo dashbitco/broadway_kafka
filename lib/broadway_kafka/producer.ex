@@ -321,6 +321,36 @@ defmodule BroadwayKafka.Producer do
     end
   end
 
+  def handle_call(:fetch_kafka_lag, _from, state) do
+    with {:ok, kafka_offsets} <-
+           :brod.fetch_committed_offsets(state.client_id, state.config.group_id) do
+      {:reply,
+       {:ok,
+        Enum.map(kafka_offsets, fn topic ->
+          %{
+            topic: topic.name,
+            offsets:
+              Enum.map(topic.partitions, fn partition ->
+                with {:ok, partition_offset} <-
+                       :brod.resolve_offset(
+                         state.config.hosts,
+                         topic.name,
+                         partition.partition_index
+                       ) do
+                  {:ok,
+                   %{
+                     partition_index: partition.partition_index,
+                     lag: partition_offset - partition.committed_offset,
+                     committed_offset: partition.committed_offset,
+                     partition_offset: partition_offset
+                   }}
+                end
+              end)
+          }
+        end)}, [], state}
+    end
+  end
+
   @impl GenStage
   def handle_cast({:update_topics, topics}, state) do
     state.client.update_topics(state.group_coordinator, topics)
@@ -573,6 +603,33 @@ defmodule BroadwayKafka.Producer do
     end
 
     :ok
+  end
+
+  @spec fetch_kafka_lag(pid()) ::
+          {:ok,
+           [
+             %{
+               topic: String.t(),
+               offsets: [
+                 {:ok,
+                  %{
+                    partition_index: non_neg_integer(),
+                    lag: non_neg_integer(),
+                    committed_offset: non_neg_integer(),
+                    partition_offset: non_neg_integer()
+                  }}
+                 | {:error, any()}
+               ]
+             }
+           ]}
+          | {:error, any()}
+  @doc """
+  Fetch the current offset of processed messages and the total number of messages
+  (`partition_offset`) for each partition and each topic the producer is consuming. Lag is the
+  difference between them. Calling this can be slow.
+  """
+  def fetch_kafka_lag(pid) do
+    GenStage.call(pid, :fetch_kafka_lag, :infinity)
   end
 
   defp maybe_schedule_poll(%{demand: 0} = state, _interval) do
