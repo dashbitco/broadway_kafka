@@ -162,27 +162,36 @@ defmodule BroadwayKafka.BrodClient do
     with {:ok, kafka_offsets} <-
            :brod.fetch_committed_offsets(client_id, group_id) do
       {:ok,
-       Enum.map(kafka_offsets, fn topic ->
-         %{
-           topic: topic.name,
-           offsets:
-             Enum.map(topic.partitions, fn partition ->
-               with {:ok, partition_offset} <-
-                      :brod.resolve_offset(
-                        hosts,
-                        topic.name,
-                        partition.partition_index
-                      ) do
-                 {:ok,
-                  %{
-                    partition_index: partition.partition_index,
-                    lag: partition_offset - partition.committed_offset,
-                    committed_offset: partition.committed_offset,
-                    partition_offset: partition_offset
-                  }}
-               end
-             end)
-         }
+       for topic <- kafka_offsets, partition <- topic.partitions do
+         {topic.name, partition.partition_index, partition.committed_offset}
+       end
+       |> Task.async_stream(
+         fn {name, partition_index, committed_offset} ->
+           with {:ok, partition_offset} <-
+                  :brod.resolve_offset(
+                    hosts,
+                    name,
+                    partition_index
+                  ) do
+             {:ok,
+              %{
+                topic: name,
+                partition_index: partition_index,
+                lag: partition_offset - committed_offset,
+                comitted_offset: committed_offset,
+                partition_offset: partition_offset
+              }}
+           end
+         end,
+         ordered: false,
+         # no point killing the producer over something that has nothing to do with its
+         # primary function
+         on_timeout: :kill_task
+       )
+       |> Enum.into([], fn
+         {:ok, {:ok, result}} -> {:ok, result}
+         {:ok, {:error, reason}} -> {:error, reason}
+         error -> error
        end)}
     end
   end

@@ -586,16 +586,10 @@ defmodule BroadwayKafka.Producer do
            [
              %{
                topic: String.t(),
-               offsets: [
-                 {:ok,
-                  %{
-                    partition_index: non_neg_integer(),
-                    lag: non_neg_integer(),
-                    committed_offset: non_neg_integer(),
-                    partition_offset: non_neg_integer()
-                  }}
-                 | {:error, any()}
-               ]
+               partition_index: non_neg_integer(),
+               lag: non_neg_integer(),
+               committed_offset: non_neg_integer(),
+               partition_offset: non_neg_integer()
              }
            ]}
           | {:error, any()}
@@ -607,6 +601,17 @@ defmodule BroadwayKafka.Producer do
   """
   def fetch_kafka_lag(pid_or_name) do
     GenStage.call(pid_or_name, :fetch_kafka_lag, :infinity)
+    |> normalize_lag_errors()
+  end
+
+  defp normalize_lag_errors(kafka_lag_result) do
+    with {:ok, results} <- kafka_lag_result,
+         true <- Enum.all?(results, &match?({:ok, _}, &1)) do
+      {:ok, Enum.map(results, fn {:ok, result} -> result end)}
+    else
+      {:error, _} = error -> error
+      false -> {:error, kafka_lag_result |> elem(1) |> Enum.filter(&(not match?({:ok, _}, &1)))}
+    end
   end
 
   defp maybe_schedule_poll(%{demand: 0} = state, _interval) do
