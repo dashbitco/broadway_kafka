@@ -55,4 +55,22 @@ defmodule BroadwayKafka.KafkaClient do
   @callback update_topics(brod_group_coordinator(), [:brod.topic()]) :: :ok
   @callback connected?(:brod.client()) :: boolean
   @callback disconnect(:brod.client()) :: :ok
+  @callback fetch_kafka_lag(:brod.client(), :brod.group_id(), [:brod.endpoint()]) ::
+              {:ok,
+               [
+                 %{
+                   topic: String.t(),
+                   offsets: [
+                     {:ok,
+                      %{
+                        partition_index: non_neg_integer(),
+                        lag: non_neg_integer(),
+                        committed_offset: non_neg_integer(),
+                        partition_offset: non_neg_integer()
+                      }}
+                     | {:error, any()}
+                   ]
+                 }
+               ]}
+              | {:error, any()}
 end

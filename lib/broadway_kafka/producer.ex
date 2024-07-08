@@ -322,33 +322,9 @@ defmodule BroadwayKafka.Producer do
   end
 
   def handle_call(:fetch_kafka_lag, _from, state) do
-    with {:ok, kafka_offsets} <-
-           :brod.fetch_committed_offsets(state.client_id, state.config.group_id) do
-      {:reply,
-       {:ok,
-        Enum.map(kafka_offsets, fn topic ->
-          %{
-            topic: topic.name,
-            offsets:
-              Enum.map(topic.partitions, fn partition ->
-                with {:ok, partition_offset} <-
-                       :brod.resolve_offset(
-                         state.config.hosts,
-                         topic.name,
-                         partition.partition_index
-                       ) do
-                  {:ok,
-                   %{
-                     partition_index: partition.partition_index,
-                     lag: partition_offset - partition.committed_offset,
-                     committed_offset: partition.committed_offset,
-                     partition_offset: partition_offset
-                   }}
-                end
-              end)
-          }
-        end)}, [], state}
-    end
+    {:reply,
+     state.client.fetch_kafka_lag(state.client_id, state.config.group_id, state.config.hosts), [],
+     state}
   end
 
   @impl GenStage

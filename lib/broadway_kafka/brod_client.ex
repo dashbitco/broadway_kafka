@@ -157,6 +157,36 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
+  @impl true
+  def fetch_kafka_lag(client_id, group_id, hosts) do
+    with {:ok, kafka_offsets} <-
+           :brod.fetch_committed_offsets(client_id, group_id) do
+      {:ok,
+       Enum.map(kafka_offsets, fn topic ->
+         %{
+           topic: topic.name,
+           offsets:
+             Enum.map(topic.partitions, fn partition ->
+               with {:ok, partition_offset} <-
+                      :brod.resolve_offset(
+                        hosts,
+                        topic.name,
+                        partition.partition_index
+                      ) do
+                 {:ok,
+                  %{
+                    partition_index: partition.partition_index,
+                    lag: partition_offset - partition.committed_offset,
+                    committed_offset: partition.committed_offset,
+                    partition_offset: partition_offset
+                  }}
+               end
+             end)
+         }
+       end)}
+    end
+  end
+
   defp shared_client_child_spec(%{shared_client: false}), do: []
 
   defp shared_client_child_spec(%{shared_client: true} = config) do
