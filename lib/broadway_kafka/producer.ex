@@ -581,7 +581,7 @@ defmodule BroadwayKafka.Producer do
     :ok
   end
 
-  @spec fetch_kafka_lag(pid()) ::
+  @spec fetch_kafka_lag(pid() | atom()) ::
           {:ok,
            [
              %{
@@ -602,10 +602,11 @@ defmodule BroadwayKafka.Producer do
   @doc """
   Fetch the current offset of processed messages and the total number of messages
   (`partition_offset`) for each partition and each topic the producer is consuming. Lag is the
-  difference between them. Calling this can be slow.
+  difference between them. To get the producer pid, you can pick any process returned by
+  `Broadway.producer_names`. Calling this can be slow.
   """
-  def fetch_kafka_lag(pid) do
-    GenStage.call(pid, :fetch_kafka_lag, :infinity)
+  def fetch_kafka_lag(pid_or_name) do
+    GenStage.call(pid_or_name, :fetch_kafka_lag, :infinity)
   end
 
   defp maybe_schedule_poll(%{demand: 0} = state, _interval) do
