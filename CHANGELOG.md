@@ -1,8 +1,8 @@
 # Changelog
 
-## Unreleased
+## v0.4.4 (2024-07-08)
 
- * Update brod dependency to ~> 4.0
+ * Update brod dependency to ~> 3.6 or ~> 4.0
 
 ## v0.4.3 (2024-06-12)
 
