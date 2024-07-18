@@ -222,8 +222,8 @@ defmodule BroadwayKafka.Producer do
   Enabling shared client may drastically decrease performance. Since connection is handled by a single process,
   producers may block each other waiting for the client response.
 
-  This is more likely to be an issue if the producers on your pipeline are fetching message from multiple topics
-  and specially if there are very low traffic topics in the mix because of batch wait times.
+  This is more likely to be an issue if the producers on your pipeline are fetching message from
+  multiple topics and specially if there are very low traffic topics, which may block on batch wait times.
 
   In summary to mitigate this you can split your topics between multiple pipelines, but notice that this will
   increase the resource usage as well creating one new client/connection for each pipeline effectively diminishing
