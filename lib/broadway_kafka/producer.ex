@@ -225,9 +225,10 @@ defmodule BroadwayKafka.Producer do
   This is more likely to be an issue if the producers on your pipeline are fetching message from
   multiple topics and specially if there are very low traffic topics, which may block on batch wait times.
 
-  In summary to mitigate this you can split your topics between multiple pipelines, but notice that this will
-  increase the resource usage as well creating one new client/connection for each pipeline effectively diminishing
-  the shared_client resource usage gains.
+  To mitigate this, you can split your topics between multiple pipelines, but notice that this will
+  increase the resource usage as well. By creating one new client/connection for each pipeline,
+  you effectively diminishing the `shared_client` resource usage gains. So make sure to measure
+  if you enable this option.
   """
 
   use GenStage
