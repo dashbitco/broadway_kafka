@@ -219,9 +219,8 @@ defmodule BroadwayKafka.Producer do
 
   ## Shared Client Performance
 
-  Enable shared client may drastically decrease performance. This happens because mutiple producers may block
-  each other waiting for the client response since the connection is hidden inside a process it becomes a
-  bottleneck.
+  Enabling shared client may drastically decrease performance. Since connection is handled by a single process,
+  producers may block each other waiting for the client response.
 
   This is more likely to be an issue if the producers on your pipeline are fetching message from multiple topics
   and specially if there are very low traffic topics in the mix because of batch wait times.
