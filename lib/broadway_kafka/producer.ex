@@ -51,7 +51,8 @@ defmodule BroadwayKafka.Producer do
 
     * `:shared_client` - Optional. When false, it starts one client per producer.
       When true, it starts a single shared client across all producers (which may reduce
-      memory/resource usage). Default is `false`.
+      memory/resource usage). May cause severe performance degradation, see
+      ["Shared Client Performance"](#module-shared-client-performance) for details. Default is `false`.
 
     * `:group_config` - Optional. A list of options used to configure the group
       coordinator. See the ["Group config options"](#module-group-config-options) section below for a list of all available
@@ -215,6 +216,19 @@ defmodule BroadwayKafka.Producer do
     * `[:broadway_kafka, :assignments_revoked, :start | :stop | :exception]` spans -
       these events are emitted in "span style" when receiving assignments revoked call from consumer group coordinator
       See `:telemetry.span/3`.
+
+  ## Shared Client Performance
+
+  Enabling shared client may drastically decrease performance. Since connection is handled by a single process,
+  producers may block each other waiting for the client response.
+
+  This is more likely to be an issue if the producers on your pipeline are fetching message from
+  multiple topics and specially if there are very low traffic topics, which may block on batch wait times.
+
+  To mitigate this, you can split your topics between multiple pipelines, but notice that this will
+  increase the resource usage as well. By creating one new client/connection for each pipeline,
+  you effectively diminishing the `shared_client` resource usage gains. So make sure to measure
+  if you enable this option.
   """
 
   use GenStage
