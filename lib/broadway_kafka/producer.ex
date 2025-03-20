@@ -234,7 +234,7 @@ defmodule BroadwayKafka.Producer do
   use GenStage
 
   require Logger
-  import Record, only: [defrecord: 2, extract: 2]
+  import Record, only: [defrecordp: 2, extract: 2]
 
   alias Broadway.{Message, Acknowledger, Producer}
   alias BroadwayKafka.Allocator
@@ -243,10 +243,10 @@ defmodule BroadwayKafka.Producer do
   @behaviour Producer
   @behaviour :brod_group_member
 
-  defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
+  defrecordp :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
-  defrecord :brod_received_assignment,
-            extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
+  defrecordp :brod_received_assignment,
+             extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
   @impl GenStage
   def init(opts) do

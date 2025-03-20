@@ -2,10 +2,10 @@ defmodule BroadwayKafka.ProducerTest do
   use ExUnit.Case
 
   import ExUnit.CaptureLog
-  import Record, only: [defrecord: 2, extract: 2]
+  import Record, only: [defrecordp: 2, extract: 2]
 
-  defrecord :brod_received_assignment,
-            extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
+  defrecordp :brod_received_assignment,
+             extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
   defmodule MessageServer do
     def start_link() do
@@ -39,8 +39,8 @@ defmodule BroadwayKafka.ProducerTest do
   defmodule FakeKafkaClient do
     @behaviour BroadwayKafka.KafkaClient
 
-    import Record, only: [defrecord: 2, extract: 2]
-    defrecord :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
+    import Record, only: [defrecordp: 2, extract: 2]
+    defrecordp :kafka_message, extract(:kafka_message, from_lib: "brod/include/brod.hrl")
 
     @impl true
     def init(opts), do: {:ok, opts[:child_specs], Map.new(opts)}
