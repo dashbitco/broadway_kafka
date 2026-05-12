@@ -8,7 +8,7 @@ defmodule BroadwayKafka.MixProject do
     [
       app: :broadway_kafka,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.12",
       name: "BroadwayKafka",
       description: @description,
       start_permanent: Mix.env() == :prod,
