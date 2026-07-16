@@ -59,6 +59,26 @@ defmodule BroadwayKafka.ProducerTest do
 
     @impl true
     def fetch(_client_id, topic, partition, offset, _opts, config) do
+      case pop_fetch_error(config) do
+        nil ->
+          do_fetch(topic, partition, offset, config)
+
+        reason ->
+          send(config[:test_pid], {:fetch_error, reason})
+          {:error, reason}
+      end
+    end
+
+    defp pop_fetch_error(config) do
+      if fetch_errors_agent = config[:fetch_errors_agent] do
+        Agent.get_and_update(fetch_errors_agent, fn
+          [reason | rest] -> {reason, rest}
+          [] -> {nil, []}
+        end)
+      end
+    end
+
+    defp do_fetch(topic, partition, offset, config) do
       n_messages = config[:max_bytes]
 
       messages =
@@ -657,6 +677,89 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "retry fetch on retriable errors without crashing the producer" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, fetch_errors_agent} =
+      Agent.start_link(fn -> [:kafka_storage_error, :not_leader_or_follower] end)
+
+    {:ok, pid} = start_broadway(message_server, fetch_errors_agent: fetch_errors_agent)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+
+    log =
+      capture_log(fn ->
+        put_assignments(producer, [[topic: "topic", partition: 0]])
+        MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+        assert_receive {:fetch_error, :kafka_storage_error}
+        assert_receive {:fetch_error, :not_leader_or_follower}
+
+        for msg <- 1..5 do
+          assert_receive {:message_handled, %{data: ^msg, partition: 0}}
+        end
+      end)
+
+    assert log =~ "Retriable error while fetching records from Kafka"
+    assert log =~ ":kafka_storage_error"
+    assert log =~ ":not_leader_or_follower"
+
+    assert Process.alive?(producer_pid)
+
+    stop_broadway(pid)
+  end
+
+  test "raise when retriable fetch errors persist after retries are exhausted" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, fetch_errors_agent} =
+      Agent.start_link(fn -> List.duplicate(:kafka_storage_error, 4) end)
+
+    {:ok, pid} = start_broadway(message_server, fetch_errors_agent: fetch_errors_agent)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+    ref = Process.monitor(producer_pid)
+
+    log =
+      capture_log(fn ->
+        put_assignments(producer, [[topic: "topic", partition: 0]])
+        MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+        assert_receive {:DOWN, ^ref, :process, ^producer_pid, _reason}
+      end)
+
+    assert log =~ "cannot fetch records from Kafka"
+    assert log =~ ":kafka_storage_error"
+
+    stop_broadway(pid)
+  end
+
+  test "raise on non-retriable fetch errors without retrying" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, fetch_errors_agent} = Agent.start_link(fn -> [:unknown_server_error] end)
+    {:ok, pid} = start_broadway(message_server, fetch_errors_agent: fetch_errors_agent)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+    ref = Process.monitor(producer_pid)
+
+    log =
+      capture_log(fn ->
+        put_assignments(producer, [[topic: "topic", partition: 0]])
+        MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+        assert_receive {:DOWN, ^ref, :process, ^producer_pid, _reason}
+      end)
+
+    refute log =~ "Retriable error while fetching records from Kafka"
+    assert log =~ "cannot fetch records from Kafka"
+    assert log =~ ":unknown_server_error"
+
+    stop_broadway(pid)
+  end
+
   defp start_broadway(message_server, opts \\ []) do
     producers_concurrency = Keyword.get(opts, :producers_concurrency, 1)
     processors_concurrency = Keyword.get(opts, :processors_concurrency, 1)
@@ -688,6 +791,8 @@ defmodule BroadwayKafka.ProducerTest do
                offset_commit_on_ack: false,
                begin_offset: :assigned,
                ack_raises_on_offset: ack_raises_on_offset,
+               fetch_errors_agent: Keyword.get(opts, :fetch_errors_agent),
+               fetch_retry_backoff_ms: 0,
                shared_client: opts[:shared_client] || false,
                child_specs: opts[:child_specs] || []
              ]},

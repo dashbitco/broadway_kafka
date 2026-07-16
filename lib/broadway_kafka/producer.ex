@@ -118,6 +118,22 @@ defmodule BroadwayKafka.Producer do
   defrecordp :brod_received_assignment,
              extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
+  # Protocol error codes that indicate a transient condition on the broker.
+  # Retrying the fetch in place avoids crashing the producer, which would
+  # force a rebalance of the whole consumer group.
+  @retriable_fetch_errors [
+    :kafka_storage_error,
+    :leader_not_available,
+    :not_leader_for_partition,
+    :not_leader_or_follower,
+    :request_timed_out,
+    :network_exception,
+    :replica_not_available
+  ]
+
+  @default_max_fetch_retries 3
+  @default_fetch_retry_backoff_ms 500
+
   @impl GenStage
   def init(opts) do
     Process.flag(:trap_exit, true)
@@ -494,15 +510,9 @@ defmodule BroadwayKafka.Producer do
   end
 
   defp fetch_messages_from_kafka(state, key, offset) do
-    %{
-      client: client,
-      client_id: client_id,
-      config: config
-    } = state
-
     {generation_id, topic, partition} = key
 
-    case client.fetch(client_id, topic, partition, offset, config[:fetch_config], config) do
+    case fetch_with_retries(state, topic, partition, offset, 0) do
       {:ok, {_watermark_offset, kafka_messages}} ->
         Enum.map(kafka_messages, fn k_msg ->
           wrap_message(k_msg, topic, partition, generation_id)
@@ -511,6 +521,36 @@ defmodule BroadwayKafka.Producer do
       {:error, reason} ->
         raise "cannot fetch records from Kafka (topic=#{topic} partition=#{partition} " <>
                 "offset=#{offset}). Reason: #{inspect(reason)}"
+    end
+  end
+
+  defp fetch_with_retries(state, topic, partition, offset, attempt) do
+    %{
+      client: client,
+      client_id: client_id,
+      config: config
+    } = state
+
+    max_retries = Keyword.get(config, :max_fetch_retries, @default_max_fetch_retries)
+
+    case client.fetch(client_id, topic, partition, offset, config[:fetch_config], config) do
+      {:error, reason} when reason in @retriable_fetch_errors and attempt < max_retries ->
+        backoff_ms =
+          config
+          |> Keyword.get(:fetch_retry_backoff_ms, @default_fetch_retry_backoff_ms)
+          |> then(&(&1 * Integer.pow(2, attempt)))
+
+        Logger.warning(
+          "Retriable error while fetching records from Kafka (topic=#{topic} " <>
+            "partition=#{partition} offset=#{offset}). Reason: #{inspect(reason)}. " <>
+            "Retrying in #{backoff_ms}ms (attempt #{attempt + 1} of #{max_retries})"
+        )
+
+        Process.sleep(backoff_ms)
+        fetch_with_retries(state, topic, partition, offset, attempt + 1)
+
+      result ->
+        result
     end
   end
 
