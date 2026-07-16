@@ -131,9 +131,6 @@ defmodule BroadwayKafka.Producer do
     :replica_not_available
   ]
 
-  @default_max_fetch_retries 3
-  @default_fetch_retry_backoff_ms 500
-
   @impl GenStage
   def init(opts) do
     Process.flag(:trap_exit, true)
@@ -531,14 +528,12 @@ defmodule BroadwayKafka.Producer do
       config: config
     } = state
 
-    max_retries = Keyword.get(config, :max_fetch_retries, @default_max_fetch_retries)
+    fetch_config = config[:fetch_config]
+    max_retries = fetch_config[:max_fetch_retries]
 
-    case client.fetch(client_id, topic, partition, offset, config[:fetch_config], config) do
+    case client.fetch(client_id, topic, partition, offset, fetch_config, config) do
       {:error, reason} when reason in @retriable_fetch_errors and attempt < max_retries ->
-        backoff_ms =
-          config
-          |> Keyword.get(:fetch_retry_backoff_ms, @default_fetch_retry_backoff_ms)
-          |> then(&(&1 * Integer.pow(2, attempt)))
+        backoff_ms = fetch_config[:fetch_retry_backoff_ms] * Integer.pow(2, attempt)
 
         Logger.warning(
           "Retriable error while fetching records from Kafka (topic=#{topic} " <>

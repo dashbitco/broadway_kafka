@@ -792,7 +792,7 @@ defmodule BroadwayKafka.ProducerTest do
                begin_offset: :assigned,
                ack_raises_on_offset: ack_raises_on_offset,
                fetch_errors_agent: Keyword.get(opts, :fetch_errors_agent),
-               fetch_retry_backoff_ms: 0,
+               fetch_config: [max_fetch_retries: 3, fetch_retry_backoff_ms: 0],
                shared_client: opts[:shared_client] || false,
                child_specs: opts[:child_specs] || []
              ]},

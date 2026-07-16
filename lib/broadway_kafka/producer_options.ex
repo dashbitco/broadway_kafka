@@ -73,6 +73,24 @@ defmodule BroadwayKafka.ProducerOptions do
       doc: """
       The most time (in millisecond) that the broker may wait for `:min_bytes` of data.
       """
+    ],
+    max_fetch_retries: [
+      type: :non_neg_integer,
+      default: 3,
+      doc: """
+      How many times a failed fetch is retried in place when Kafka returns a retriable error,
+      before the producer raises as it does for any other error. Set to `0` to disable retries.
+      BroadwayKafka uses this option itself and does not pass it to `:brod.fetch/5`.
+      """
+    ],
+    fetch_retry_backoff_ms: [
+      type: :non_neg_integer,
+      default: 500,
+      doc: """
+      The time, in milliseconds, to wait before the first retry of a failed fetch
+      (see `:max_fetch_retries`). The wait time doubles on each later retry. BroadwayKafka uses
+      this option itself and does not pass it to `:brod.fetch/5`.
+      """
     ]
   ]
 

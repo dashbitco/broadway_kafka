@@ -268,6 +268,38 @@ defmodule BroadwayKafka.BrodClientTest do
       assert fetch_config[:max_wait_time] == 3000
     end
 
+    test ":max_fetch_retries is an optional non-negative integer" do
+      opts = put_in(@opts, [:fetch_config, :max_fetch_retries], :an_atom)
+
+      assert_opt_error(
+        opts,
+        "expected :max_fetch_retries to be a non negative integer, got: :an_atom"
+      )
+
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(@opts)
+      assert fetch_config[:max_fetch_retries] == 3
+
+      opts = put_in(@opts, [:fetch_config, :max_fetch_retries], 0)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      assert fetch_config[:max_fetch_retries] == 0
+    end
+
+    test ":fetch_retry_backoff_ms is an optional non-negative integer" do
+      opts = put_in(@opts, [:fetch_config, :fetch_retry_backoff_ms], :an_atom)
+
+      assert_opt_error(
+        opts,
+        "expected :fetch_retry_backoff_ms to be a non negative integer, got: :an_atom"
+      )
+
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(@opts)
+      assert fetch_config[:fetch_retry_backoff_ms] == 500
+
+      opts = put_in(@opts, [:fetch_config, :fetch_retry_backoff_ms], 100)
+      {:ok, [], %{fetch_config: fetch_config}} = BrodClient.init(opts)
+      assert fetch_config[:fetch_retry_backoff_ms] == 100
+    end
+
     test ":client_id_prefix is an optional atom value" do
       opts = put_in(@opts, [:client_config, :client_id_prefix], :wrong_type)
 

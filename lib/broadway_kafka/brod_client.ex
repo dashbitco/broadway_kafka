@@ -51,6 +51,10 @@ defmodule BroadwayKafka.BrodClient do
 
   @impl true
   def fetch(client_id, topic, partition, offset, opts, _config) do
+    # These options drive BroadwayKafka's own retry logic and are not valid
+    # :brod.fetch/5 options.
+    opts = Map.drop(opts, [:max_fetch_retries, :fetch_retry_backoff_ms])
+
     :brod.fetch(client_id, topic, partition, offset, opts)
   end
 
