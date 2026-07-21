@@ -1,90 +1,36 @@
 defmodule BroadwayKafka.BrodClient do
   @moduledoc false
 
-  require Logger
-
   @behaviour BroadwayKafka.KafkaClient
+
+  alias BroadwayKafka.ProducerOptions
 
   # We only accept :commit_to_kafka_v2 for now so we hard coded the value
   # to avoid problems in case :brod's default policy changes in the future
   @offset_commit_policy :commit_to_kafka_v2
 
-  @supported_group_config_options [
-    :offset_commit_interval_seconds,
-    :rejoin_delay_seconds,
-    :session_timeout_seconds,
-    :heartbeat_rate_seconds,
-    :rebalance_timeout_seconds
-  ]
-
-  @supported_fetch_config_options [
-    :min_bytes,
-    :max_bytes,
-    :max_wait_time
-  ]
-
-  @supported_client_config_options [
-    :ssl,
-    :sasl,
-    :connect_timeout,
-    :request_timeout,
-    :client_id_prefix,
-    :query_api_versions,
-    :extra_sock_opts,
-    :allow_topic_auto_creation
-  ]
-
-  @default_receive_interval 2000
-
-  # Private option. Not exposed to the user
-  @default_reconnect_timeout 1000
-
-  @default_offset_commit_on_ack true
-
-  @offset_reset_policy_values [:earliest, :latest]
-
-  @default_offset_reset_policy :latest
-
-  @begin_offset_values [:assigned, :reset]
-
-  @default_begin_offset :assigned
-
-  @default_shared_client false
-
   @impl true
   def init(opts) do
-    with {:ok, hosts} <- validate(opts, :hosts, required: true),
-         {:ok, group_id} <- validate(opts, :group_id, required: true),
-         {:ok, topics} <- validate(opts, :topics, required: true),
-         {:ok, receive_interval} <-
-           validate(opts, :receive_interval, default: @default_receive_interval),
-         {:ok, reconnect_timeout} <-
-           validate(opts, :reconnect_timeout, default: @default_reconnect_timeout),
-         {:ok, offset_commit_on_ack} <-
-           validate(opts, :offset_commit_on_ack, default: @default_offset_commit_on_ack),
-         {:ok, offset_reset_policy} <-
-           validate(opts, :offset_reset_policy, default: @default_offset_reset_policy),
-         {:ok, begin_offset} <-
-           validate(opts, :begin_offset, default: @default_begin_offset),
-         {:ok, shared_client} <-
-           validate(opts, :shared_client, default: @default_shared_client),
-         {:ok, group_config} <- validate_group_config(opts),
-         {:ok, fetch_config} <- validate_fetch_config(opts),
-         {:ok, client_config} <- validate_client_config(opts) do
+    broadway_opts = opts[:broadway]
+
+    with {:ok, opts} <-
+           opts
+           |> Keyword.delete(:broadway)
+           |> NimbleOptions.validate(ProducerOptions.schema()) do
       config = %{
-        hosts: parse_hosts(hosts),
-        group_id: group_id,
-        topics: topics,
-        receive_interval: receive_interval,
-        reconnect_timeout: reconnect_timeout,
-        offset_commit_on_ack: offset_commit_on_ack,
-        offset_reset_policy: offset_reset_policy,
-        begin_offset: begin_offset,
-        group_config: [{:offset_commit_policy, @offset_commit_policy} | group_config],
-        fetch_config: Map.new(fetch_config),
-        client_config: client_config,
-        shared_client: shared_client,
-        shared_client_id: build_shared_client_id(opts)
+        hosts: opts[:hosts],
+        group_id: opts[:group_id],
+        topics: opts[:topics],
+        receive_interval: opts[:receive_interval],
+        reconnect_timeout: opts[:reconnect_timeout],
+        offset_commit_on_ack: opts[:offset_commit_on_ack],
+        offset_reset_policy: opts[:offset_reset_policy],
+        begin_offset: opts[:begin_offset],
+        group_config: [{:offset_commit_policy, @offset_commit_policy} | opts[:group_config]],
+        fetch_config: Map.new(opts[:fetch_config]),
+        client_config: opts[:client_config],
+        shared_client: opts[:shared_client],
+        shared_client_id: build_shared_client_id(opts, broadway_opts)
       }
 
       {:ok, shared_client_child_spec(config), config}
@@ -209,211 +155,6 @@ defmodule BroadwayKafka.BrodClient do
     )
   end
 
-  defp validate(opts, key, options \\ []) when is_list(opts) do
-    has_key = Keyword.has_key?(opts, key)
-    required = Keyword.get(options, :required, false)
-    default = Keyword.get(options, :default)
-
-    cond do
-      has_key ->
-        validate_option(key, opts[key])
-
-      required ->
-        {:error, "#{inspect(key)} is required"}
-
-      default != nil ->
-        validate_option(key, default)
-
-      true ->
-        {:ok, nil}
-    end
-  end
-
-  defp validate_option(:hosts, value) do
-    if supported_hosts?(value) do
-      {:ok, value}
-    else
-      validation_error(
-        :hosts,
-        "a list of host/port pairs or a single string of comma separated HOST:PORT pairs",
-        value
-      )
-    end
-  end
-
-  defp validate_option(:group_id, value) when not is_binary(value) or value == "",
-    do: validation_error(:group_id, "a non empty string", value)
-
-  defp validate_option(:topics, value) do
-    if is_list(value) && Enum.all?(value, &is_binary/1) do
-      {:ok, value}
-    else
-      validation_error(:topics, "a list of strings", value)
-    end
-  end
-
-  defp validate_option(:receive_interval, value) when not is_integer(value) or value < 0,
-    do: validation_error(:receive_interval, "a non-negative integer", value)
-
-  defp validate_option(:reconnect_timeout, value) when not is_integer(value) or value < 0,
-    do: validation_error(:reconnect_timeout, "a non-negative integer", value)
-
-  defp validate_option(:offset_commit_on_ack, value) when not is_boolean(value),
-    do: validation_error(:offset_commit_on_ack, "a boolean", value)
-
-  defp validate_option(:offset_reset_policy, {:timestamp, timestamp})
-       when is_integer(timestamp) and timestamp > 0 do
-    {:ok, {:timestamp, timestamp}}
-  end
-
-  defp validate_option(:offset_reset_policy, value)
-       when value not in @offset_reset_policy_values do
-    validation_error(
-      :offset_reset_policy,
-      "one of #{inspect(@offset_reset_policy_values)} or `{:timestamp, timestamp}` where timestamp is a non-negative integer",
-      value
-    )
-  end
-
-  defp validate_option(:begin_offset, value)
-       when value not in @begin_offset_values do
-    validation_error(:begin_offset, "one of #{inspect(@begin_offset_values)}", value)
-  end
-
-  defp validate_option(:offset_commit_interval_seconds, value)
-       when not is_integer(value) or value < 1,
-       do: validation_error(:offset_commit_interval_seconds, "a positive integer", value)
-
-  defp validate_option(:rejoin_delay_seconds, value) when not is_integer(value) or value < 0,
-    do: validation_error(:rejoin_delay_seconds, "a non-negative integer", value)
-
-  defp validate_option(:session_timeout_seconds, value) when not is_integer(value) or value < 1,
-    do: validation_error(:session_timeout_seconds, "a positive integer", value)
-
-  defp validate_option(:heartbeat_rate_seconds, value) when not is_integer(value) or value < 1,
-    do: validation_error(:heartbeat_rate_seconds, "a positive integer", value)
-
-  defp validate_option(:rebalance_timeout_seconds, value) when not is_integer(value) or value < 1,
-    do: validation_error(:rebalance_timeout_seconds, "a positive integer", value)
-
-  defp validate_option(:min_bytes, value) when not is_integer(value) or value < 1,
-    do: validation_error(:min_bytes, "a positive integer", value)
-
-  defp validate_option(:max_bytes, value) when not is_integer(value) or value < 1,
-    do: validation_error(:max_bytes, "a positive integer", value)
-
-  defp validate_option(:max_wait_time, value) when not is_integer(value) or value < 1,
-    do: validation_error(:max_wait_time, "a positive integer", value)
-
-  defp validate_option(:client_id_prefix, value) when not is_binary(value),
-    do: validation_error(:client_id_prefix, "a string", value)
-
-  defp validate_option(:shared_client, value) when not is_boolean(value),
-    do: validation_error(:shared_client, "a boolean", value)
-
-  defp validate_option(:sasl, :undefined),
-    do: {:ok, :undefined}
-
-  defp validate_option(:sasl, value = {:callback, _callback_module, _opts}),
-    do: {:ok, value}
-
-  defp validate_option(:sasl, {mechanism, username, password} = value)
-       when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
-              is_binary(username) and
-              is_binary(password) do
-    {:ok, value}
-  end
-
-  defp validate_option(:sasl, {mechanism, path} = value)
-       when mechanism in [:plain, :scram_sha_256, :scram_sha_512] and
-              is_binary(path) do
-    {:ok, value}
-  end
-
-  defp validate_option(:sasl, value) do
-    validation_error(
-      :sasl,
-      "a tuple of SASL mechanism, username and password, or mechanism and path",
-      value
-    )
-  end
-
-  defp validate_option(:query_api_versions, value) when not is_boolean(value),
-    do: validation_error(:query_api_versions, "a boolean", value)
-
-  defp validate_option(:allow_topic_auto_creation, value) when not is_boolean(value),
-    do: validation_error(:allow_topic_auto_creation, "a boolean", value)
-
-  defp validate_option(:ssl, value) when is_boolean(value), do: {:ok, value}
-
-  defp validate_option(:ssl, value) do
-    if Keyword.keyword?(value) do
-      {:ok, value}
-    else
-      validation_error(:ssl, "a keyword list of SSL/TLS client options", value)
-    end
-  end
-
-  defp validate_option(:connect_timeout, value) when not is_integer(value) or value < 1,
-    do: validation_error(:connect_timeout, "a positive integer", value)
-
-  defp validate_option(:request_timeout, value) when not is_integer(value) or value < 1000,
-    do: validation_error(:request_timeout, "a positive integer >= 1000", value)
-
-  defp validate_option(_, value), do: {:ok, value}
-
-  defp validation_error(option, expected, value) do
-    {:error, "expected #{inspect(option)} to be #{expected}, got: #{inspect(value)}"}
-  end
-
-  defp validate_group_config(opts) do
-    with {:ok, [_ | _] = config} <-
-           validate_supported_opts(opts, :group_config, @supported_group_config_options),
-         {:ok, _} <- validate(config, :offset_commit_interval_seconds),
-         {:ok, _} <- validate(config, :rejoin_delay_seconds),
-         {:ok, _} <- validate(config, :session_timeout_seconds),
-         {:ok, _} <- validate(config, :heartbeat_rate_seconds),
-         {:ok, _} <- validate(config, :rebalance_timeout_seconds) do
-      {:ok, config}
-    end
-  end
-
-  defp validate_fetch_config(opts) do
-    with {:ok, [_ | _] = config} <-
-           validate_supported_opts(opts, :fetch_config, @supported_fetch_config_options),
-         {:ok, _} <- validate(config, :min_bytes),
-         {:ok, _} <- validate(config, :max_bytes),
-         {:ok, _} <- validate(config, :max_wait_time) do
-      {:ok, config}
-    end
-  end
-
-  defp validate_client_config(opts) do
-    with {:ok, [_ | _] = config} <-
-           validate_supported_opts(opts, :client_config, @supported_client_config_options),
-         {:ok, _} <- validate(config, :client_id_prefix),
-         {:ok, _} <- validate(config, :sasl),
-         {:ok, _} <- validate(config, :ssl),
-         {:ok, _} <- validate(config, :connect_timeout),
-         {:ok, _} <- validate(config, :request_timeout),
-         {:ok, _} <- validate(config, :query_api_versions),
-         {:ok, _} <- validate(config, :allow_topic_auto_creation) do
-      {:ok, config}
-    end
-  end
-
-  defp validate_supported_opts(all_opts, group_name, supported_opts) do
-    opts = Keyword.get(all_opts, group_name, [])
-
-    opts
-    |> Keyword.keys()
-    |> Enum.reject(fn k -> k in supported_opts end)
-    |> case do
-      [] -> {:ok, opts}
-      keys -> {:error, "Unsupported options #{inspect(keys)} for #{inspect(group_name)}"}
-    end
-  end
-
   defp offset_reset_policy_value(policy) do
     case policy do
       :earliest ->
@@ -427,31 +168,10 @@ defmodule BroadwayKafka.BrodClient do
     end
   end
 
-  defp supported_hosts?(hosts_single_binary) when is_binary(hosts_single_binary) do
-    String.match?(hosts_single_binary, ~r/^(.+:[\d]+)(,.+:[\d]+)?$/)
-  end
-
-  defp supported_hosts?([{key, _value} | rest]) when is_binary(key) or is_atom(key),
-    do: supported_hosts?(rest)
-
-  defp supported_hosts?([]), do: true
-  defp supported_hosts?(_other), do: false
-
-  defp parse_hosts(hosts_single_binary) when is_binary(hosts_single_binary) do
-    hosts_single_binary
-    |> String.split(",")
-    |> Enum.map(fn host_port ->
-      [host, port] = String.split(host_port, ":")
-      {host, String.to_integer(port)}
-    end)
-  end
-
-  defp parse_hosts(hosts), do: hosts
-
-  defp build_shared_client_id(opts) do
+  defp build_shared_client_id(opts, broadway_opts) do
     if opts[:shared_client] do
       prefix = get_in(opts, [:client_config, :client_id_prefix])
-      broadway_name = opts[:broadway][:name]
+      broadway_name = broadway_opts[:name]
       :"#{prefix}#{Module.concat(broadway_name, SharedClient)}"
     end
   end

@@ -532,8 +532,8 @@ defmodule BroadwayKafka.Producer do
     client = producer_opts[:client] || BroadwayKafka.BrodClient
 
     case client.init(Keyword.put(producer_opts, :broadway, opts)) do
-      {:error, message} ->
-        raise ArgumentError, "invalid options given to #{client}.init/1, " <> message
+      {:error, %NimbleOptions.ValidationError{} = error} ->
+        raise error
 
       {:ok, extra_child_specs, config} ->
         new_producer_opts =
