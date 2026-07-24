@@ -8,6 +8,8 @@ defmodule BroadwayKafka.BrodClient do
   # We only accept :commit_to_kafka_v2 for now so we hard coded the value
   # to avoid problems in case :brod's default policy changes in the future
   @offset_commit_policy :commit_to_kafka_v2
+  @offset_resolution_attempts 3
+  @offset_resolution_backoff_ms 100
 
   @impl true
   def init(opts) do
@@ -91,15 +93,23 @@ defmodule BroadwayKafka.BrodClient do
   def resolve_offset(topic, partition, current_offset, offset_reset_policy, config) do
     policy = offset_reset_policy_value(offset_reset_policy)
 
+    # This is only for testing.
+    brod = Map.get(config, :brod_module, :brod)
+
     if current_offset == :undefined do
-      lookup_offset(config.hosts, topic, partition, policy, config.client_config)
+      lookup_offset(config.hosts, topic, partition, policy, config.client_config, brod)
     else
-      case :brod.fetch({config.hosts, config.client_config}, topic, partition, current_offset) do
+      result =
+        retry_offset_resolution(fn ->
+          brod.fetch({config.hosts, config.client_config}, topic, partition, current_offset)
+        end)
+
+      case result do
         {:ok, _} ->
           current_offset
 
         {:error, :offset_out_of_range} ->
-          lookup_offset(config.hosts, topic, partition, policy, config.client_config)
+          lookup_offset(config.hosts, topic, partition, policy, config.client_config, brod)
 
         {:error, reason} ->
           raise "cannot resolve offset (hosts=#{inspect(config.hosts)} topic=#{topic} " <>
@@ -121,14 +131,19 @@ defmodule BroadwayKafka.BrodClient do
     ]
   end
 
-  defp lookup_offset(hosts, topic, partition, policy, client_config) do
-    case :brod.resolve_offset(hosts, topic, partition, policy, client_config) do
+  defp lookup_offset(hosts, topic, partition, policy, client_config, brod) do
+    result =
+      retry_offset_resolution(fn ->
+        brod.resolve_offset(hosts, topic, partition, policy, client_config)
+      end)
+
+    case result do
       {:ok, -1} ->
         # `:brod.resolve_offset` returns -1 when asked to resolve a timestamp newer
         # than all the messages in the partition.
         # -1 is not a valid offset you can use with `:brod.fetch` so we need to
         # resolve the latest offset instead
-        lookup_offset(hosts, topic, partition, :latest, client_config)
+        lookup_offset(hosts, topic, partition, :latest, client_config, brod)
 
       {:ok, offset} ->
         offset
@@ -136,6 +151,17 @@ defmodule BroadwayKafka.BrodClient do
       {:error, reason} ->
         raise "cannot resolve begin offset (hosts=#{inspect(hosts)} topic=#{topic} " <>
                 "partition=#{partition}). Reason: #{inspect(reason)}"
+    end
+  end
+
+  defp retry_offset_resolution(fun, attempts_left \\ @offset_resolution_attempts) do
+    case fun.() do
+      {:error, reason} when reason != :offset_out_of_range and attempts_left > 1 ->
+        Process.sleep(@offset_resolution_backoff_ms)
+        retry_offset_resolution(fun, attempts_left - 1)
+
+      result ->
+        result
     end
   end
 
