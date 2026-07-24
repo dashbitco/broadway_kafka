@@ -501,7 +501,7 @@ defmodule BroadwayKafka.BrodClientTest do
     @behaviour :kpro_auth_backend
 
     @impl true
-    def auth(_host, _sock, _mod, _client_id, _timeout, _sasl_opts = {}) do
+    def auth(_host, _sock, _handshake_vsn, _mod, _client_id, _timeout, _sasl_opts = {}) do
       :ok
     end
   end

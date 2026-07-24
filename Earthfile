@@ -2,13 +2,13 @@ VERSION  0.7
 
 all:
     BUILD \
-        --build-arg ELIXIR_BASE=1.11.3-erlang-23.2.5-alpine-3.16.0 \
-        --build-arg ELIXIR_BASE=1.14.3-erlang-25.3-alpine-3.17.2 \
+        --build-arg ELIXIR_BASE=1.16.3-erlang-24.3.4.2-alpine-3.20.8 \
+        --build-arg ELIXIR_BASE=1.16.3-erlang-26.2.5.11-alpine-3.23.3 \
         +integration-test
 
 
 setup-base:
-    ARG ELIXIR_BASE=1.13.4-erlang-24.3.4.2-alpine-3.16.0
+    ARG ELIXIR_BASE=1.16.3-erlang-24.3.4.2-alpine-3.20.8
     FROM hexpm/elixir:$ELIXIR_BASE
     RUN apk add --no-progress --update build-base
     RUN mix local.rebar --force

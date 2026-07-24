@@ -8,7 +8,7 @@ defmodule BroadwayKafka.MixProject do
     [
       app: :broadway_kafka,
       version: @version,
-      elixir: "~> 1.12",
+      elixir: "~> 1.16",
       name: "BroadwayKafka",
       description: @description,
       start_permanent: Mix.env() == :prod,
@@ -27,7 +27,7 @@ defmodule BroadwayKafka.MixProject do
   defp deps do
     [
       {:broadway, "~> 1.0"},
-      {:brod, "~> 3.16 or ~> 4.0"},
+      {:brod, "~> 4.0"},
       {:nimble_options, "~> 0.3 or ~> 1.0"},
       {:telemetry, "~> 0.4.3 or ~> 1.0"},
       {:ex_doc, ">= 0.19.0", only: :docs}
