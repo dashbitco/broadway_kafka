@@ -710,6 +710,50 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "retry fetch on connection-level errors without crashing the producer" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    # The three shapes a dying broker produces, in order: an established
+    # connection dies mid-request, :brod_client returns the cached exit reason
+    # during its reconnect cooldown, then reconnects fail to resolve the
+    # broker's DNS record.
+    {:ok, fetch_errors_agent} =
+      Agent.start_link(fn ->
+        [
+          {:connection_down, {:shutdown, :ssl_closed}},
+          {:shutdown, :ssl_closed},
+          {:nxdomain, [{:kpro_connection, :connect, 4, []}]}
+        ]
+      end)
+
+    {:ok, pid} = start_broadway(message_server, fetch_errors_agent: fetch_errors_agent)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+
+    log =
+      capture_log(fn ->
+        put_assignments(producer, [[topic: "topic", partition: 0]])
+        MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+        assert_receive {:fetch_error, {:connection_down, {:shutdown, :ssl_closed}}}
+        assert_receive {:fetch_error, {:shutdown, :ssl_closed}}
+        assert_receive {:fetch_error, {:nxdomain, _stacktrace}}
+
+        for msg <- 1..5 do
+          assert_receive {:message_handled, %{data: ^msg, partition: 0}}
+        end
+      end)
+
+    assert log =~ "Retriable error while fetching records from Kafka"
+    assert log =~ ":ssl_closed"
+    assert log =~ ":nxdomain"
+
+    assert Process.alive?(producer_pid)
+
+    stop_broadway(pid)
+  end
+
   test "raise when retriable fetch errors persist after retries are exhausted" do
     {:ok, message_server} = MessageServer.start_link()
 
@@ -732,6 +776,33 @@ defmodule BroadwayKafka.ProducerTest do
 
     assert log =~ "cannot fetch records from Kafka"
     assert log =~ ":kafka_storage_error"
+
+    stop_broadway(pid)
+  end
+
+  test "raise on non-retriable tuple fetch errors without retrying" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, fetch_errors_agent} =
+      Agent.start_link(fn -> [{:sasl_auth_error, "bad credentials"}] end)
+
+    {:ok, pid} = start_broadway(message_server, fetch_errors_agent: fetch_errors_agent)
+
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+    ref = Process.monitor(producer_pid)
+
+    log =
+      capture_log(fn ->
+        put_assignments(producer, [[topic: "topic", partition: 0]])
+        MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+        assert_receive {:DOWN, ^ref, :process, ^producer_pid, _reason}
+      end)
+
+    refute log =~ "Retriable error while fetching records from Kafka"
+    assert log =~ "cannot fetch records from Kafka"
+    assert log =~ ":sasl_auth_error"
 
     stop_broadway(pid)
   end

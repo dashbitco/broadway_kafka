@@ -131,6 +131,19 @@ defmodule BroadwayKafka.Producer do
     :replica_not_available
   ]
 
+  # Connection-level failures surfaced by :brod/:kpro when a broker goes away
+  # (broker replaced, DNS record gone, connection closed under us). These are
+  # transient: retried fetches re-resolve the partition leader from fresh
+  # metadata.
+  @retriable_connect_errors [
+    :nxdomain,
+    :econnrefused,
+    :etimedout,
+    :ehostunreach,
+    :closed,
+    :timeout
+  ]
+
   @impl GenStage
   def init(opts) do
     Process.flag(:trap_exit, true)
@@ -532,22 +545,49 @@ defmodule BroadwayKafka.Producer do
     max_retries = fetch_config[:max_fetch_retries]
 
     case client.fetch(client_id, topic, partition, offset, fetch_config, config) do
-      {:error, reason} when reason in @retriable_fetch_errors and attempt < max_retries ->
-        backoff_ms = fetch_config[:fetch_retry_backoff_ms] * Integer.pow(2, attempt)
+      {:error, reason} = error ->
+        if attempt < max_retries and retriable_fetch_error?(reason) do
+          backoff_ms = fetch_config[:fetch_retry_backoff_ms] * Integer.pow(2, attempt)
 
-        Logger.warning(
-          "Retriable error while fetching records from Kafka (topic=#{topic} " <>
-            "partition=#{partition} offset=#{offset}). Reason: #{inspect(reason)}. " <>
-            "Retrying in #{backoff_ms}ms (attempt #{attempt + 1} of #{max_retries})"
-        )
+          Logger.warning(
+            "Retriable error while fetching records from Kafka (topic=#{topic} " <>
+              "partition=#{partition} offset=#{offset}). Reason: #{inspect(reason)}. " <>
+              "Retrying in #{backoff_ms}ms (attempt #{attempt + 1} of #{max_retries})"
+          )
 
-        Process.sleep(backoff_ms)
-        fetch_with_retries(state, topic, partition, offset, attempt + 1)
+          Process.sleep(backoff_ms)
+          fetch_with_retries(state, topic, partition, offset, attempt + 1)
+        else
+          error
+        end
 
       result ->
         result
     end
   end
+
+  defp retriable_fetch_error?(reason)
+       when reason in @retriable_fetch_errors
+       when reason in @retriable_connect_errors,
+       do: true
+
+  # :kpro_connection wraps the exit reason when an established connection dies
+  # mid-request.
+  defp retriable_fetch_error?({:connection_down, reason}),
+    do: retriable_fetch_error?(reason)
+
+  # :brod_client returns the raw exit reason of a recently-dead connection
+  # while within :reconnect_cool_down_seconds of its death, for example
+  # {:shutdown, :ssl_closed} when a broker closed its TLS connections on the
+  # way down.
+  defp retriable_fetch_error?({:shutdown, _reason}), do: true
+
+  # :kpro_connection.init reports connection establishment failures as
+  # {reason, stacktrace}, for example {:nxdomain, [...]}.
+  defp retriable_fetch_error?({reason, stacktrace}) when is_list(stacktrace),
+    do: retriable_fetch_error?(reason)
+
+  defp retriable_fetch_error?(_reason), do: false
 
   defp wrap_message(kafka_msg, topic, partition, generation_id) do
     kafka_message(value: data, offset: offset, key: key, ts: ts, headers: headers) = kafka_msg
