@@ -2,6 +2,14 @@ defmodule BroadwayKafka.ProducerOptions do
   @moduledoc false
 
   group_config_schema = [
+    group_instance_id: [
+      type: {:custom, __MODULE__, :validate_nonempty_string, [:group_instance_id]},
+      doc: """
+      A unique, non-empty string that identifies this consumer group member across restarts.
+      This enables [static group membership](https://kafka.apache.org/39/design/design/#static-membership)
+      and requires `:brod` 4.4.2 or later. *Available since v0.6.0*.
+      """
+    ],
     offset_commit_interval_seconds: [
       type: :pos_integer,
       default: 5,
