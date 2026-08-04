@@ -6,6 +6,22 @@ defmodule BroadwayKafka.ConsumerTest.Config do
   def last_messages do
     (n_messages() - 2)..n_messages() |> Enum.map(&to_string/1)
   end
+
+  def wait_for_messages(messages_agent) do
+    deadline = System.monotonic_time(:millisecond) + 10_000
+    wait_for_messages(messages_agent, deadline)
+  end
+
+  defp wait_for_messages(messages_agent, deadline) do
+    messages = Agent.get(messages_agent, & &1)
+
+    if length(messages) >= n_messages() or System.monotonic_time(:millisecond) >= deadline do
+      messages
+    else
+      Process.sleep(10)
+      wait_for_messages(messages_agent, deadline)
+    end
+  end
 end
 
 defmodule BroadwayKafka.ConsumerTest do
@@ -128,10 +144,7 @@ defmodule BroadwayKafka.ConsumerTest do
         IO.puts("Got last message from partition 1")
     end
 
-    # Let's wait a bit to see if we get more messages
-    Process.sleep(2000)
-
-    messages = Agent.get(messages_agent, & &1)
+    messages = Config.wait_for_messages(messages_agent)
 
     on_exit(fn ->
       stop_broadway(broadway_pid)
@@ -263,6 +276,7 @@ defmodule BroadwayKafka.ConsumerTest do
     Enum.each(producers, fn pid ->
       receive do
         {:trace, ^pid, :receive, {:put_assignments, _, _}} ->
+          :sys.get_state(pid)
           IO.puts("Assignment received. Producer: #{inspect(pid)}")
       end
     end)
@@ -390,10 +404,7 @@ defmodule BroadwayKafka.ConsumerSharedClientTest do
         IO.puts("Got last message from partition 1")
     end
 
-    # Let's wait a bit to see if we get more messages
-    Process.sleep(2000)
-
-    messages = Agent.get(messages_agent, & &1)
+    messages = Config.wait_for_messages(messages_agent)
 
     on_exit(fn ->
       stop_broadway(broadway_pid)
@@ -525,6 +536,7 @@ defmodule BroadwayKafka.ConsumerSharedClientTest do
     Enum.each(producers, fn pid ->
       receive do
         {:trace, ^pid, :receive, {:put_assignments, _, _}} ->
+          :sys.get_state(pid)
           IO.puts("Assignment received. Producer: #{inspect(pid)}")
       end
     end)
