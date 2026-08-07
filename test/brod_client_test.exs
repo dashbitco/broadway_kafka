@@ -169,6 +169,26 @@ defmodule BroadwayKafka.BrodClientTest do
       assert {:ok, [], %{begin_offset: :reset}} = BrodClient.init(opts)
     end
 
+    test ":group_instance_id is an optional non-empty string" do
+      opts = put_in(@opts, [:group_config, :group_instance_id], :an_atom)
+
+      assert_opt_error(
+        opts,
+        "expected :group_instance_id to be a non empty string, got: :an_atom"
+      )
+
+      opts = put_in(@opts, [:group_config, :group_instance_id], "")
+
+      assert_opt_error(
+        opts,
+        ~s/expected :group_instance_id to be a non empty string, got: ""/
+      )
+
+      opts = put_in(@opts, [:group_config, :group_instance_id], "consumer-1")
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
+      assert group_config[:group_instance_id] == "consumer-1"
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 
