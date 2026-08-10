@@ -3,6 +3,24 @@ defmodule BroadwayKafka.BrodClientTest do
 
   alias BroadwayKafka.BrodClient
 
+  defmodule FakeBrod do
+    def fetch(hosts_and_config, topic, partition, offset) do
+      reply({:fetch, hosts_and_config, topic, partition, offset})
+    end
+
+    def resolve_offset(hosts, topic, partition, policy, client_config) do
+      reply({:resolve_offset, hosts, topic, partition, policy, client_config})
+    end
+
+    defp reply(call) do
+      send(self(), call)
+
+      [result | rest] = Process.get({__MODULE__, :results})
+      Process.put({__MODULE__, :results}, rest)
+      result
+    end
+  end
+
   @opts [
     group_id: "group",
     hosts: [host: 9092],
@@ -512,9 +530,101 @@ defmodule BroadwayKafka.BrodClientTest do
     end
   end
 
+  describe "resolve_offset/5" do
+    test "retries transient fetch errors and returns the current offset after success" do
+      with_brod_results(
+        [{:error, :enotconn}, {:error, :timeout}, {:ok, {11, []}}],
+        fn ->
+          assert BrodClient.resolve_offset("topic", 2, 10, :latest, brod_config()) == 10
+
+          assert_receive {:fetch, _, "topic", 2, 10}
+          assert_receive {:fetch, _, "topic", 2, 10}
+          assert_receive {:fetch, _, "topic", 2, 10}
+          refute_receive {:fetch, _, "topic", 2, 10}
+        end
+      )
+    end
+
+    test "raises the existing error after fetch retries are exhausted" do
+      reason = [{{"broker", 9092}, {:failed_to_upgrade_to_ssl, :enotconn}}]
+
+      error =
+        with_brod_results(List.duplicate({:error, reason}, 3), fn ->
+          assert_raise RuntimeError, fn ->
+            BrodClient.resolve_offset("topic", 2, 10, :latest, brod_config())
+          end
+        end)
+
+      assert Exception.message(error) ==
+               "cannot resolve offset (hosts=[{\"broker\", 9092}] topic=topic partition=2). " <>
+                 "Reason: [{{\"broker\", 9092}, {:failed_to_upgrade_to_ssl, :enotconn}}]"
+
+      assert_receive {:fetch, _, "topic", 2, 10}
+      assert_receive {:fetch, _, "topic", 2, 10}
+      assert_receive {:fetch, _, "topic", 2, 10}
+      refute_receive {:fetch, _, "topic", 2, 10}
+    end
+
+    test "resolves the reset policy without retrying an out-of-range fetch" do
+      with_brod_results([{:error, :offset_out_of_range}, {:ok, 4}], fn ->
+        assert BrodClient.resolve_offset("topic", 2, 10, :earliest, brod_config()) == 4
+
+        assert_receive {:fetch, _, "topic", 2, 10}
+        assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+        refute_receive {:fetch, _, "topic", 2, 10}
+      end)
+    end
+
+    test "retries transient errors while looking up the reset-policy offset" do
+      with_brod_results([{:error, :not_leader_for_partition}, {:ok, 4}], fn ->
+        assert BrodClient.resolve_offset("topic", 2, :undefined, :earliest, brod_config()) == 4
+
+        assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+        assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+        refute_receive {:resolve_offset, _, _, _, _, _}
+      end)
+    end
+
+    test "raises the existing begin-offset error after lookup retries are exhausted" do
+      error =
+        with_brod_results(List.duplicate({:error, :not_leader_for_partition}, 3), fn ->
+          assert_raise RuntimeError, fn ->
+            BrodClient.resolve_offset("topic", 2, :undefined, :earliest, brod_config())
+          end
+        end)
+
+      assert Exception.message(error) ==
+               "cannot resolve begin offset (hosts=[{\"broker\", 9092}] topic=topic " <>
+                 "partition=2). Reason: :not_leader_for_partition"
+
+      assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+      assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+      assert_receive {:resolve_offset, [{"broker", 9092}], "topic", 2, -2, []}
+      refute_receive {:resolve_offset, _, _, _, _, _}
+    end
+  end
+
   defp assert_opt_error(opts, expected) do
     assert {:error, %NimbleOptions.ValidationError{message: message}} = BrodClient.init(opts)
     assert message =~ expected
+  end
+
+  defp brod_config do
+    %{
+      hosts: [{"broker", 9092}],
+      client_config: [],
+      brod_module: FakeBrod
+    }
+  end
+
+  defp with_brod_results(results, fun) do
+    Process.put({FakeBrod, :results}, results)
+
+    try do
+      fun.()
+    after
+      Process.delete({FakeBrod, :results})
+    end
   end
 
   defmodule FakeSaslMechanismPlugin do
