@@ -10,7 +10,7 @@ all:
 setup-base:
     ARG ELIXIR_BASE=1.16.3-erlang-24.3.4.2-alpine-3.20.8
     FROM hexpm/elixir:$ELIXIR_BASE
-    RUN apk add --no-progress --update build-base
+    RUN apk add --no-progress --update build-base cmake
     RUN mix local.rebar --force
     RUN mix local.hex --force
     ENV ELIXIR_ASSERT_TIMEOUT=10000
