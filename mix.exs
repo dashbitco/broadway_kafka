@@ -30,7 +30,7 @@ defmodule BroadwayKafka.MixProject do
       {:brod, "~> 4.6.1"},
       {:nimble_options, "~> 0.3 or ~> 1.0"},
       {:telemetry, "~> 0.4.3 or ~> 1.0"},
-      {:ex_doc, ">= 0.19.0", only: :docs}
+      {:ex_doc, ">= 0.19.0", only: :dev}
     ]
   end
 
