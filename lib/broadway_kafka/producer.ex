@@ -152,7 +152,7 @@ defmodule BroadwayKafka.Producer do
 
     draining_after_revoke_flag =
       self()
-      |> drain_after_revoke_table_name!()
+      |> drain_after_revoke_table_name()
       |> drain_after_revoke_table_init!()
 
     prefix = get_in(config, [:client_config, :client_id_prefix])
@@ -216,7 +216,7 @@ defmodule BroadwayKafka.Producer do
 
   @impl GenStage
   def handle_call(:drain_after_revoke, _from, %{group_coordinator: nil} = state) do
-    set_draining_after_revoke!(state.draining_after_revoke_flag, false)
+    set_draining_after_revoke(state.draining_after_revoke_flag, false)
     {:reply, :ok, [], state}
   end
 
@@ -224,7 +224,7 @@ defmodule BroadwayKafka.Producer do
     state = reset_buffer(state)
 
     if Acknowledger.all_drained?(state.acks) do
-      set_draining_after_revoke!(state.draining_after_revoke_flag, false)
+      set_draining_after_revoke(state.draining_after_revoke_flag, false)
       {:reply, :ok, [], %{state | acks: Acknowledger.new()}}
     else
       {:noreply, [], %{state | revoke_caller: from}}
@@ -337,7 +337,7 @@ defmodule BroadwayKafka.Producer do
 
     new_state =
       if drained? && state.revoke_caller && Acknowledger.all_drained?(updated_acks) do
-        set_draining_after_revoke!(state.draining_after_revoke_flag, false)
+        set_draining_after_revoke(state.draining_after_revoke_flag, false)
         GenStage.reply(state.revoke_caller, :ok)
         %{state | revoke_caller: nil, acks: Acknowledger.new()}
       else
@@ -462,8 +462,8 @@ defmodule BroadwayKafka.Producer do
 
     producer_pid
     |> maybe_process_name.()
-    |> drain_after_revoke_table_name!()
-    |> set_draining_after_revoke!(true)
+    |> drain_after_revoke_table_name()
+    |> set_draining_after_revoke(true)
 
     metadata = %{producer: maybe_process_name.(producer_pid)}
 
@@ -717,22 +717,27 @@ defmodule BroadwayKafka.Producer do
     Process.send_after(self(), :reconnect, timeout)
   end
 
-  defp drain_after_revoke_table_name!(pid) do
-    {_, producer_name} = Process.info(pid, :registered_name)
+  defp drain_after_revoke_table_name(nil), do: nil
 
-    Module.concat([producer_name, DrainingAfterRevoke])
+  defp drain_after_revoke_table_name(pid) do
+    case Process.info(pid, :registered_name) do
+      {:registered_name, producer_name} -> Module.concat([producer_name, DrainingAfterRevoke])
+      nil -> nil
+    end
   end
 
   defp drain_after_revoke_table_init!(table_name) do
     table_name = :ets.new(table_name, [:named_table, :public, :set])
 
-    set_draining_after_revoke!(table_name, false)
+    true = :ets.insert(table_name, {:draining, false})
 
     table_name
   end
 
-  defp set_draining_after_revoke!(table_name, value) do
+  defp set_draining_after_revoke(table_name, value) do
     :ets.insert(table_name, {:draining, value})
+  rescue
+    ArgumentError -> :ok
   end
 
   defp is_draining_after_revoke?(table_name) do

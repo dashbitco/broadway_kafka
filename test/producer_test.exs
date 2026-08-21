@@ -618,6 +618,34 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "revoking assignments after the producer stops exits with :noproc" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+    producer = get_producer(pid)
+    producer_pid = Process.whereis(producer)
+    ref = Process.monitor(producer_pid)
+
+    Process.exit(producer_pid, :kill)
+    assert_receive {:DOWN, ^ref, :process, ^producer_pid, :killed}
+
+    assert {:noproc, _call} =
+             catch_exit(BroadwayKafka.Producer.assignments_revoked(producer_pid))
+
+    stop_broadway(pid)
+  end
+
+  test "revoking assignments after the draining table is deleted succeeds" do
+    {:ok, message_server} = MessageServer.start_link()
+    {:ok, pid} = start_broadway(message_server)
+    producer = get_producer(pid)
+    draining_table = Module.concat([producer, "DrainingAfterRevoke"])
+
+    assert :ets.delete(draining_table)
+    assert :ok = BroadwayKafka.Producer.assignments_revoked(producer)
+
+    stop_broadway(pid)
+  end
+
   test "stop trying to receive new messages after start draining" do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server)
