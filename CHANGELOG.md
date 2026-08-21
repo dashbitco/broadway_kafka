@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.0 (2026-08-21)
+
+  * The "big" new feature here is support for [**static membership**](https://kafka.apache.org/39/design/design/#static-membership) for consumers in a group (see also KIP-345). This required a dependency bump for the underlying `:brod` Kafka SDK, which might be considered a breaking change.
+  * Retry offset-resolution errors.
+  * Do not error on revoked assignments during shutdown.
+  * Require Elixir 1.16+.
+
 ## v0.5.0 (2026-07-23)
 
   * Add support for `:allow_topic_auto_creation` in client config.
