@@ -7,7 +7,10 @@ defmodule BroadwayKafka.ProducerOptions do
       doc: """
       A unique, non-empty string that identifies this consumer group member across restarts.
       This enables [static group membership](https://kafka.apache.org/39/design/design/#static-membership)
-      and requires `:brod` 4.6.1 or later. *Available since v0.6.0*.
+      and requires `:brod` 4.6.3 or later. When Kafka fences a static member, BroadwayKafka
+      stops that member instead of trying to take the ID back. Retrying can make old and new
+      instances fence each other during a rolling deploy and cause repeated group rebalances.
+      *Available since v0.6.0*.
       """
     ],
     offset_commit_interval_seconds: [

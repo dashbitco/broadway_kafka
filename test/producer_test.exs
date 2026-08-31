@@ -4,6 +4,12 @@ defmodule BroadwayKafka.ProducerTest do
   import ExUnit.CaptureLog
   import Record, only: [defrecordp: 2, extract: 2]
 
+  alias BroadwayKafka.Allocator
+
+  def handle_telemetry(event, measurements, metadata, test_pid) do
+    send(test_pid, {:telemetry, event, measurements, metadata})
+  end
+
   defrecordp :brod_received_assignment,
              extract(:brod_received_assignment, from_lib: "brod/include/brod.hrl")
 
@@ -54,6 +60,11 @@ defmodule BroadwayKafka.ProducerTest do
 
       send(config[:test_pid], {:setup, client_id})
       {pid, ref} = spawn_monitor(fn -> Process.sleep(:infinity) end)
+
+      if config[:expose_group_coordinator] do
+        send(config[:test_pid], {:group_coordinator, pid})
+      end
+
       {:ok, pid, ref}
     end
 
@@ -683,6 +694,152 @@ defmodule BroadwayKafka.ProducerTest do
     stop_broadway(pid)
   end
 
+  test "fully pauses a fenced static group member and emits telemetry" do
+    handler_id = {__MODULE__, make_ref()}
+
+    :ok =
+      :telemetry.attach(
+        handler_id,
+        [:broadway_kafka, :fenced_instance_id],
+        &__MODULE__.handle_telemetry/4,
+        self()
+      )
+
+    on_exit(fn -> :telemetry.detach(handler_id) end)
+
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        batchers_concurrency: 1,
+        expose_group_coordinator: true,
+        group_instance_id: "consumer-1"
+      )
+
+    assert_receive {:setup, client_id}
+    assert_receive {:group_coordinator, group_coordinator}
+
+    producer_name = get_producer(pid)
+    producer = Process.whereis(producer_name)
+    generation_id = put_assignments(producer_name, [[topic: "topic", partition: 0]])
+
+    assert_receive {:messages_fetched, 0}
+    assert Allocator.to_map(get_processor_allocator(pid)) == %{0 => [{"topic", 0}]}
+    assert Allocator.to_map(get_batcher_allocator(pid)) == %{0 => [{"topic", 0}]}
+
+    log =
+      capture_log(fn ->
+        Process.exit(group_coordinator, :fenced_instance_id)
+
+        assert_receive {:telemetry, [:broadway_kafka, :fenced_instance_id],
+                        %{system_time: system_time},
+                        %{
+                          producer: ^producer,
+                          client_id: ^client_id,
+                          group_id: "group",
+                          group_instance_id: "consumer-1"
+                        }}
+
+        assert is_integer(system_time)
+      end)
+
+    assert log =~ "Kafka fenced static group member"
+    assert_receive :disconnected
+
+    # Keep the allocations so late messages can still reach their processor
+    # and batcher after an abrupt coordinator exit.
+    assert Allocator.to_map(get_processor_allocator(pid)) == %{0 => [{"topic", 0}]}
+    assert Allocator.to_map(get_batcher_allocator(pid)) == %{0 => [{"topic", 0}]}
+
+    flush_messages_received()
+    MessageServer.push_messages(message_server, [1], topic: "topic", partition: 0)
+
+    send(producer, {:poll, {generation_id, "topic", 0}})
+    send(producer, {:ack, {generation_id, "topic", 0}, [1]})
+    send(producer, :maybe_schedule_poll)
+    put_assignments(producer_name, [[topic: "topic", partition: 0]])
+    send(producer, :reconnect)
+
+    Process.exit(Process.whereis(client_id), :kill)
+
+    refute_receive {:messages_fetched, _}, 30
+    refute_receive {:message_handled, _}
+    refute_receive {:setup, _}, 30
+    refute_receive {:telemetry, [:broadway_kafka, :fenced_instance_id], _, _}
+
+    assert Process.alive?(producer)
+
+    stop_broadway(pid)
+  end
+
+  test "messages in flight when the member is fenced still reach batchers" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        batchers_concurrency: 1,
+        expose_group_coordinator: true,
+        group_instance_id: "consumer-1"
+      )
+
+    assert_receive {:group_coordinator, group_coordinator}
+
+    producer_name = get_producer(pid)
+    put_assignments(producer_name, [[topic: "topic", partition: 0]])
+    assert_receive {:messages_fetched, 0}
+
+    batcher = pid |> get_batcher() |> Process.whereis()
+    :ok = :sys.suspend(batcher)
+
+    MessageServer.push_messages(message_server, 1..5, topic: "topic", partition: 0)
+
+    for _ <- 1..5 do
+      assert_receive {:message_handled, %{topic: "topic", partition: 0}}
+    end
+
+    capture_log(fn ->
+      Process.exit(group_coordinator, :fenced_instance_id)
+      assert_receive :disconnected
+    end)
+
+    :ok = :sys.resume(batcher)
+
+    assert_receive {:batch_handled, %{topic: "topic", partition: 0}}
+    assert Process.alive?(batcher)
+
+    stop_broadway(pid)
+  end
+
+  test "keeps a shared client connected after fencing" do
+    {:ok, message_server} = MessageServer.start_link()
+
+    {:ok, pid} =
+      start_broadway(message_server,
+        expose_group_coordinator: true,
+        group_instance_id: "consumer-1",
+        shared_client: true
+      )
+
+    assert_receive {:setup, client_id}
+    assert_receive {:group_coordinator, group_coordinator}
+
+    producer = pid |> get_producer() |> Process.whereis()
+
+    capture_log(fn ->
+      Process.exit(group_coordinator, :fenced_instance_id)
+      Process.sleep(10)
+    end)
+
+    refute_receive :disconnected
+    assert Process.alive?(Process.whereis(client_id))
+
+    send(producer, :reconnect)
+    refute_receive {:setup, _}, 30
+    assert Process.alive?(producer)
+
+    stop_broadway(pid)
+  end
+
   test "keep the producer alive on ack errors and log the exception" do
     {:ok, message_server} = MessageServer.start_link()
     {:ok, pid} = start_broadway(message_server, ack_raises_on_offset: 4)
@@ -865,6 +1022,12 @@ defmodule BroadwayKafka.ProducerTest do
     batchers_concurrency = Keyword.get(opts, :batchers_concurrency)
     ack_raises_on_offset = Keyword.get(opts, :ack_raises_on_offset, nil)
 
+    group_config =
+      case Keyword.fetch(opts, :group_instance_id) do
+        {:ok, group_instance_id} -> [group_instance_id: group_instance_id]
+        :error -> []
+      end
+
     batchers =
       if batchers_concurrency do
         [default: [concurrency: batchers_concurrency, batch_size: 10, batch_timeout: 10]]
@@ -882,6 +1045,7 @@ defmodule BroadwayKafka.ProducerTest do
              [
                client: FakeKafkaClient,
                hosts: [],
+               group_id: "group",
                test_pid: self(),
                message_server: message_server,
                receive_interval: 0,
@@ -889,8 +1053,10 @@ defmodule BroadwayKafka.ProducerTest do
                max_bytes: 10,
                offset_commit_on_ack: false,
                begin_offset: :assigned,
+               group_config: group_config,
                ack_raises_on_offset: ack_raises_on_offset,
                fetch_errors_agent: Keyword.get(opts, :fetch_errors_agent),
+               expose_group_coordinator: Keyword.get(opts, :expose_group_coordinator, false),
                fetch_config: [max_fetch_retries: 3, fetch_retry_backoff_ms: 0],
                shared_client: opts[:shared_client] || false,
                child_specs: opts[:child_specs] || []
@@ -921,12 +1087,15 @@ defmodule BroadwayKafka.ProducerTest do
         )
       end
 
-    BroadwayKafka.Producer.assignments_received(
-      producer,
-      group_member_id,
-      group_generation_id,
-      kafka_assignments
-    )
+    :ok =
+      BroadwayKafka.Producer.assignments_received(
+        producer,
+        group_member_id,
+        group_generation_id,
+        kafka_assignments
+      )
+
+    group_generation_id
   end
 
   defp new_unique_name() do
@@ -936,6 +1105,21 @@ defmodule BroadwayKafka.ProducerTest do
   defp get_producer(broadway, index \\ 0) do
     {_, name} = Process.info(broadway, :registered_name)
     :"#{name}.Broadway.Producer_#{index}"
+  end
+
+  defp get_processor_allocator(broadway) do
+    {_, name} = Process.info(broadway, :registered_name)
+    Module.concat([name, "Allocator_processor_default"])
+  end
+
+  defp get_batcher_allocator(broadway) do
+    {_, name} = Process.info(broadway, :registered_name)
+    Module.concat([name, "Allocator_batcher_consumer_default"])
+  end
+
+  defp get_batcher(broadway) do
+    {_, name} = Process.info(broadway, :registered_name)
+    :"#{name}.Broadway.Batcher_default"
   end
 
   defp stop_broadway(pid) do
