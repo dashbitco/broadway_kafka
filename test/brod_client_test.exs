@@ -207,6 +207,13 @@ defmodule BroadwayKafka.BrodClientTest do
       assert group_config[:group_instance_id] == "consumer-1"
     end
 
+    test "static members stop after Kafka fences them" do
+      opts = put_in(@opts, [:group_config, :group_instance_id], "consumer-1")
+      {:ok, [], %{group_config: group_config}} = BrodClient.init(opts)
+
+      assert group_config[:fenced_member_action] == :stop
+    end
+
     test ":offset_commit_interval_seconds is an optional non-negative integer" do
       opts = put_in(@opts, [:group_config, :offset_commit_interval_seconds], :an_atom)
 

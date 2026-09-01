@@ -8,6 +8,9 @@ defmodule BroadwayKafka.BrodClient do
   # We only accept :commit_to_kafka_v2 for now so we hard coded the value
   # to avoid problems in case :brod's default policy changes in the future
   @offset_commit_policy :commit_to_kafka_v2
+  # Retrying after Kafka fences a static member can make old and new instances
+  # fence each other during a rolling deploy and cause repeated group rebalances.
+  @fenced_member_action :stop
   @offset_resolution_attempts 3
   @offset_resolution_backoff_ms 100
 
@@ -28,7 +31,11 @@ defmodule BroadwayKafka.BrodClient do
         offset_commit_on_ack: opts[:offset_commit_on_ack],
         offset_reset_policy: opts[:offset_reset_policy],
         begin_offset: opts[:begin_offset],
-        group_config: [{:offset_commit_policy, @offset_commit_policy} | opts[:group_config]],
+        group_config: [
+          {:offset_commit_policy, @offset_commit_policy},
+          {:fenced_member_action, @fenced_member_action}
+          | opts[:group_config]
+        ],
         fetch_config: Map.new(opts[:fetch_config]),
         client_config: opts[:client_config],
         shared_client: opts[:shared_client],
