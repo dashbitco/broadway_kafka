@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.6.1 (2026-08-31)
+
+  * Require `:brod` 4.6.3.
+  * Stop a static group member after Kafka fences it instead of trying to take its `:group_instance_id` back. This prevents old and new consumers from repeatedly fencing each other and causing group rebalances during something like rolling deploys.
+  * Emit a `[:broadway_kafka, :fenced_instance_id]` telemetry event when Kafka fences a static group member.
+  * Keep partition routing available for messages that were already in the pipeline when Kafka fenced the member.
+
 ## v0.6.0 (2026-08-21)
 
   * The "big" new feature here is support for [**static membership**](https://kafka.apache.org/39/design/design/#static-membership) for consumers in a group (see also KIP-345). This required a dependency bump for the underlying `:brod` Kafka SDK, which might be considered a breaking change.
